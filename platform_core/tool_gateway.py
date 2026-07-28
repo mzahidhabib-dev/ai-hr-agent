@@ -83,6 +83,7 @@ def check_calendar_availability(tenant_id: str) -> list:
     return ["2026-07-20T10:00:00Z", "2026-07-21T14:00:00Z"]
 
 # --- IMPLEMENTED TOOLS ---
+import json
 from platform_core.security.tenant_isolation import enforce_tenant
 
 @enforce_tenant
@@ -122,8 +123,7 @@ def update_crm(tenant_id: str, prospect_id: int, stage_id: str, value: float = 0
                 "prospect_id": prospect_id,
                 "stage_id": stage_id,
                 "exc_type": type(e).__name__,
-                "error": str(e),
-                "catch_reason": "Catching pg8000 DB exception; rolling back and re-raising to caller"
+                "error": str(e)
             }
         )
         if conn:
@@ -154,8 +154,53 @@ def record_handoff(tenant_id: str, prospect_id: int, opportunity_id: int, summar
                 "tenant_id": tenant_id,
                 "prospect_id": prospect_id,
                 "exc_type": type(e).__name__,
-                "error": str(e),
-                "catch_reason": "Catching pg8000 DB exception; rolling back and re-raising to caller"
+                "error": str(e)
+            }
+        )
+        if conn:
+            conn.rollback()
+        raise e
+    finally:
+        if conn:
+            conn.close()
+
+def _get_or_create_default_prospect(cursor, tenant_id: str) -> int:
+    """Helper to ensure a valid prospect_id exists for handoffs foreign key constraint."""
+    cursor.execute("SELECT prospect_id FROM prospects WHERE tenant_id = %s LIMIT 1", (tenant_id,))
+    row = cursor.fetchone()
+    if row:
+        return row[0]
+    cursor.execute(
+        "INSERT INTO prospects (tenant_id, company, domain) VALUES (%s, %s, %s) RETURNING prospect_id",
+        (tenant_id, "Default Support Client", "support.client.com")
+    )
+    return cursor.fetchone()[0]
+
+@enforce_tenant
+def record_support_handoff(tenant_id: str, conversation_id: str, handoff_package: dict) -> int:
+    """Writes a support handoff record package to the Postgres `handoffs` table."""
+    logger.info("Recording support human handoff", extra={"tenant_id": tenant_id, "conversation_id": conversation_id})
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        prospect_id = _get_or_create_default_prospect(cursor, tenant_id)
+        summary_json = json.dumps({"conversation_id": conversation_id, "package": handoff_package})
+        cursor.execute(
+            "INSERT INTO handoffs (tenant_id, prospect_id, summary) VALUES (%s, %s, %s) RETURNING handoff_id",
+            (tenant_id, prospect_id, summary_json)
+        )
+        handoff_id = cursor.fetchone()[0]
+        conn.commit()
+        return handoff_id
+    except Exception as e:
+        logger.error(
+            "Failed to record support handoff",
+            extra={
+                "tenant_id": tenant_id,
+                "conversation_id": conversation_id,
+                "exc_type": type(e).__name__,
+                "error": str(e)
             }
         )
         if conn:
@@ -174,7 +219,8 @@ def call(tool_name: str, **kwargs):
         "send_email": send_email,
         "check_calendar_availability": check_calendar_availability,
         "update_crm": update_crm,
-        "record_handoff": record_handoff
+        "record_handoff": record_handoff,
+        "record_support_handoff": record_support_handoff
     }
     
     if tool_name not in tools:

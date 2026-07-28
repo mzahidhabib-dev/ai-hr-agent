@@ -31,6 +31,12 @@ test_phase17.py
 test_phase18.py
 test_n8n_email.py
 .env.example
+support_agent_tier1_roadmap.md
+support_agent_tier2_roadmap.md
+support_agent_tier3_roadmap.md
+
+Enterprise_AI_Support_Agent_Detailed_Brief.txt
+rules.md
 
 # Python
 __pycache__/
