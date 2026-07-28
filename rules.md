@@ -120,7 +120,32 @@ Any `DROP`, `DELETE`, `TRUNCATE`, or bulk overwrite — state exactly what will 
 **Rule 19 — One step, one commit**
 Each roadmap step = one commit with a message referencing the step number (e.g. `Step 2.4: Tool Gateway minimum capabilities`). Makes it trivial to `git revert` a single bad step without touching others — useful given Rule 3's "don't build on unconfirmed steps."
 
+**Rule 20 — Zero Assumption Import & Signature Verification**
+NEVER assume or guess file paths, module names, function signatures, or return types. ALWAYS inspect the actual source code of any module BEFORE importing or invoking it.
 
+**Rule 21 — Strict Architectural Boundary Enforcement (SDK Isolation)**
+Business Agent code (`business_agents/support/`) MUST ONLY import `platform_core.sdk` (`from platform_core.sdk import sdk`). Direct imports of DB drivers (`pg8000`), `redis`, `google.genai`, `openai`, or raw SQL inside business agents are strictly banned.
+
+**Rule 22 — Zero Regression & Existing Code Preservation**
+Adding new features must NEVER break, delete, or alter existing working business agent flows (Sales Agent) or platform core capabilities.
+
+**Rule 23 — No Declaration of Success Without Verification Execution**
+Editing a file does NOT mark a step complete. You MUST run a verification script/command and confirm clean execution logs before declaring success.
+
+**Rule 24 — Mandatory Tenant Isolation on Every Database Query**
+Every single database query or insert MUST explicitly filter/insert by `tenant_id`.
+
+**Rule 25 — Idempotency & Duplicate Action Prevention**
+Check whether side-effect write actions (`send_email`, `update_crm`, `create_ticket`) have already been performed before executing.
+
+**Rule 26 — Comprehensive Error Logging & Event Publishing**
+Swallowing exceptions silently is banned. Catching exceptions must log structured metadata via `sdk.get_logger(__name__)` and publish `workflow.failed` via `sdk.events.publish()`.
+
+**Rule 27 — Strict Discussion vs. Execution Boundary**
+NEVER edit or write code while the user is discussing ideas, reviewing specs, or planning. Code edits are ONLY allowed when the user explicitly instructs to write/execute code for a confirmed step.
+
+**Rule 28 — Micro-Steps & Zero-Bug Incrementality**
+Implementation MUST proceed in tiny, atomic micro-steps (e.g. 1 data structure or 1 single function at a time). Never bundle multiple files into one step. Verify every micro-step immediately before proceeding.
 
 
 ---
@@ -135,3 +160,4 @@ Each roadmap step = one commit with a message referencing the step number (e.g. 
 - [ ] If this is a frontend step involving a list, search, or live data, did I think about pagination/debouncing/loading state upfront?
 
 If any box is unchecked, expect Gemini to stop and ask rather than proceed.
+

@@ -1,0 +1,1363 @@
+
+ENTERPRISE AI CUSTOMER SUPPORT AGENT
+Detailed Product, Architecture, Logic, Feature Tiers, Technology Strategy, and Implementation Brief
+Version: July 2026
+
+============================================================
+1. EXECUTIVE SUMMARY
+============================================================
+
+The goal is not to build another FAQ chatbot.
+
+The Enterprise AI Customer Support Agent is a multi-tenant, production-grade support intelligence and automation platform that can:
+
+1. Understand customer requests across channels.
+2. Identify customer, account, plan, history, and business context.
+3. Diagnose technical, billing, account, product, and operational issues.
+4. Retrieve and validate information from trusted knowledge sources.
+5. Take safe actions through controlled business tools and APIs.
+6. Resolve low-risk issues autonomously.
+7. Escalate high-risk, low-confidence, or emotionally sensitive issues to humans.
+8. Transfer complete context to human agents without forcing customers to repeat themselves.
+9. Detect when an apparent AI resolution was actually a "quiet failure."
+10. Continuously evaluate answer quality, groundedness, policy compliance, and true resolution.
+11. Monitor knowledge-base health and identify documentation gaps.
+12. Optimize model usage and AI costs.
+13. Detect emerging incidents and recurring support problems.
+14. Generate operational, management, and executive-level support intelligence.
+15. Improve through evaluation, replay, human feedback, and controlled knowledge/prompt updates.
+
+The product should be built on the user's existing AI Employee Platform wherever possible rather than duplicating existing infrastructure.
+
+Existing reusable capabilities include:
+
+- Multi-tenant architecture and tenant isolation.
+- Unified AI Gateway.
+- LLM token counting and cost tracking.
+- Structured AI outputs and schema validation.
+- Confidence engine.
+- Immutable audit logging.
+- Decision cards and HITL approval queue.
+- Tool gateway.
+- Short-term and long-term memory.
+- Knowledge provider.
+- Event system.
+- Structured logging.
+- MCP client.
+- Execution replay.
+- Evaluation helpers.
+- Central SDK.
+- FastAPI backend.
+- PostgreSQL.
+- Redis via Docker deployment.
+- LangGraph orchestration.
+- n8n integrations.
+- React/Vite live dashboard.
+
+The support agent should be an additional business agent on top of this platform_core, not a separate monolithic application.
+
+============================================================
+2. PRODUCT POSITIONING
+============================================================
+
+The product should be positioned as:
+
+"An Enterprise AI Support Employee that understands customers, investigates issues, executes safe support actions, resolves problems, escalates intelligently, and continuously measures whether customers were actually helped."
+
+It is NOT:
+
+- A basic chatbot.
+- A static FAQ bot.
+- A simple RAG wrapper.
+- A ticket classifier only.
+- An autonomous agent with unrestricted API access.
+
+It is a controlled AI workforce for customer support.
+
+The central design principle is:
+
+ANSWER -> VERIFY -> ACT -> VERIFY AGAIN -> RESOLVE OR ESCALATE
+
+The agent must optimize for:
+
+True Resolution > Deflection
+Correctness > Speed alone
+Groundedness > Confidence alone
+Safe Action > Autonomous Action
+Customer Outcome > Bot Metrics
+
+============================================================
+3. TIERED PRODUCT SCOPE
+============================================================
+
+TIER 1 — PRODUCTION MVP
+Purpose: Reliable AI support automation for real customers.
+
+TIER 2 — PREMIUM SUPPORT INTELLIGENCE
+Purpose: Move beyond chatbot functionality into autonomous support operations.
+
+TIER 3 — FLAGSHIP / ENTERPRISE
+Purpose: Governance, evaluation, FinOps, incident intelligence, continuous improvement, and enterprise-grade operational control.
+
+All three tiers are part of the final product vision. Implementation can be staged.
+
+============================================================
+4. TIER 1 — PRODUCTION MVP
+============================================================
+
+4.1 Omnichannel Intake
+
+Inputs:
+
+- Website chat.
+- Email.
+- Helpdesk ticket webhooks.
+- REST API.
+- Webhooks.
+- n8n workflows.
+- Optional messaging channels.
+
+Normalized inbound event:
+
+{
+  tenant_id,
+  channel,
+  conversation_id,
+  customer_id,
+  external_message_id,
+  message,
+  timestamp,
+  attachments,
+  metadata
+}
+
+Logic:
+
+1. Validate tenant.
+2. Deduplicate external message ID.
+3. Identify or create customer.
+4. Identify existing conversation/ticket.
+5. Load conversation memory.
+6. Load customer/account context.
+7. Start support graph.
+
+------------------------------------------------------------
+4.2 Customer 360 Context
+------------------------------------------------------------
+
+The agent should construct a context package before reasoning.
+
+Data sources:
+
+- CRM.
+- Helpdesk.
+- Billing system.
+- Subscription system.
+- Product database.
+- Previous conversations.
+- Previous tickets.
+- Product usage.
+- Recent events.
+- System status.
+- Customer plan/tier.
+
+Example:
+
+CustomerContext:
+- customer_id
+- account_id
+- company
+- plan
+- plan_limits
+- subscription_status
+- account_age
+- open_tickets
+- previous_tickets
+- recent_actions
+- recent_errors
+- customer_value
+- SLA
+- VIP_status
+
+The agent should never expose internal context unless permitted by policy.
+
+------------------------------------------------------------
+4.3 Intent Classification
+------------------------------------------------------------
+
+Classify:
+
+- BILLING
+- TECHNICAL
+- ACCOUNT
+- PRODUCT
+- HOW_TO
+- BUG
+- INCIDENT
+- REFUND
+- CANCELLATION
+- SECURITY
+- LEGAL
+- FEATURE_REQUEST
+- GENERAL
+- ESCALATION
+
+Also classify:
+
+- Urgency.
+- Severity.
+- Sentiment.
+- Customer frustration.
+- Churn/cancellation intent.
+- Required action.
+- Risk level.
+
+Classification should be structured and deterministic where possible.
+
+------------------------------------------------------------
+4.4 Knowledge Retrieval
+------------------------------------------------------------
+
+Use RAG with:
+
+- Semantic search.
+- Keyword search.
+- Metadata filtering.
+- Tenant filtering.
+- Product filtering.
+- Version filtering.
+- Customer-plan filtering.
+- Freshness weighting.
+
+Sources may include:
+
+- Help center.
+- Internal documentation.
+- Product manuals.
+- SOPs.
+- API documentation.
+- Policies.
+- Pricing documentation.
+- Troubleshooting guides.
+
+The retrieval process:
+
+Query -> Rewrite -> Retrieve -> Rerank -> Filter -> Evidence Package
+
+The model should receive evidence, not an unrestricted document dump.
+
+------------------------------------------------------------
+4.5 Grounded Response Generation
+------------------------------------------------------------
+
+The response agent must answer only from:
+
+1. Retrieved trusted knowledge.
+2. Verified customer/account context.
+3. Authorized tool results.
+4. Explicitly approved policies.
+
+If evidence is insufficient:
+
+- Ask a targeted clarification question, OR
+- Escalate.
+
+Never invent policy.
+
+------------------------------------------------------------
+4.6 Ticket Lifecycle
+------------------------------------------------------------
+
+Statuses:
+
+NEW
+CLASSIFIED
+INVESTIGATING
+WAITING_FOR_CUSTOMER
+WAITING_FOR_HUMAN
+RESOLVED
+CLOSED
+REOPENED
+
+Every transition should be auditable.
+
+------------------------------------------------------------
+4.7 Human Escalation
+------------------------------------------------------------
+
+Escalate when:
+
+- Confidence below threshold.
+- Knowledge conflict.
+- Security issue.
+- Legal issue.
+- Financially sensitive action.
+- High-value customer.
+- Critical severity.
+- Repeated failed attempts.
+- Customer explicitly requests human.
+- High frustration.
+- SLA risk.
+- Tool failure.
+- AI safety policy trigger.
+
+Handoff package:
+
+- Customer summary.
+- Issue summary.
+- Conversation transcript.
+- Relevant evidence.
+- Actions attempted.
+- Tool results.
+- Diagnosis.
+- Recommended next action.
+- Customer sentiment.
+- Urgency.
+- SLA.
+- Risk.
+
+Customer should not repeat information.
+
+------------------------------------------------------------
+4.8 Follow-Up
+------------------------------------------------------------
+
+After resolution:
+
+- Send confirmation.
+- Ask whether issue is resolved when appropriate.
+- Monitor response.
+- Reopen if customer indicates failure.
+- Record resolution outcome.
+
+The system must distinguish:
+
+AI claimed resolved
+vs.
+Customer confirmed resolved
+
+============================================================
+5. TIER 2 — PREMIUM SUPPORT INTELLIGENCE
+============================================================
+
+5.1 Autonomous Support Actions
+------------------------------------------------------------
+
+Tool categories:
+
+Customer:
+- Lookup profile.
+- Update profile.
+- Verify identity.
+
+Billing:
+- Lookup invoice.
+- Resend invoice.
+- Check payment.
+- Refund.
+- Cancel subscription.
+- Change plan.
+
+Technical:
+- Check API usage.
+- Query logs.
+- Check service status.
+- Validate configuration.
+- Run diagnostics.
+
+Support:
+- Create ticket.
+- Update ticket.
+- Assign ticket.
+- Add internal note.
+- Schedule callback.
+
+Every tool requires:
+
+- Authentication.
+- Tenant isolation.
+- Permission policy.
+- Input validation.
+- Idempotency.
+- Audit log.
+- Result validation.
+
+High-risk actions require HITL.
+
+------------------------------------------------------------
+5.2 Policy and Action Guardrails
+------------------------------------------------------------
+
+Use an action policy engine.
+
+Example:
+
+Refund <= $50:
+Auto
+
+Refund $50-$500:
+Human review
+
+Refund > $500:
+Mandatory human approval
+
+Delete account:
+Mandatory human approval
+
+Enterprise contract cancellation:
+Mandatory human approval
+
+Security incident:
+Immediate escalation
+
+Policies should be configurable per tenant.
+
+------------------------------------------------------------
+5.3 Troubleshooting Agent
+------------------------------------------------------------
+
+For technical problems:
+
+1. Identify symptom.
+2. Collect environment.
+3. Identify product version.
+4. Check account configuration.
+5. Query relevant logs.
+6. Check known incidents.
+7. Generate hypotheses.
+8. Test safe hypotheses.
+9. Recommend fix.
+10. Verify result.
+
+The agent should not blindly provide a generic article.
+
+------------------------------------------------------------
+5.4 Customer Frustration Intelligence
+------------------------------------------------------------
+
+Detect:
+
+- Repeated questions.
+- Repeated failed solutions.
+- Anger.
+- Frustration.
+- Cancellation intent.
+- Churn risk.
+- Human request.
+
+Escalation priority should increase dynamically.
+
+------------------------------------------------------------
+5.5 Unified Customer Memory
+------------------------------------------------------------
+
+Maintain:
+
+Short-term:
+- Current conversation.
+- Current issue.
+- Current troubleshooting steps.
+
+Long-term:
+- Previous issues.
+- Preferences.
+- Account history.
+- Resolutions.
+- Known environment.
+
+Memory must be tenant-scoped and permission-aware.
+
+------------------------------------------------------------
+5.6 Proactive Support
+------------------------------------------------------------
+
+The system can detect:
+
+- Usage approaching limits.
+- Repeated errors.
+- Failed payments.
+- Expiring subscriptions.
+- Configuration problems.
+- Known incidents.
+
+Then proactively notify customers or create support tasks.
+
+------------------------------------------------------------
+5.7 AI Resolution Verification
+------------------------------------------------------------
+
+After an AI response:
+
+1. Predict resolution probability.
+2. Monitor customer reply.
+3. Detect repeated issue.
+4. Detect negative sentiment.
+5. Check reopening.
+6. Check cross-channel contact.
+7. Compare future ticket similarity.
+
+Calculate:
+
+Verified Resolution Rate
+False Resolution Rate
+Reopen Rate
+Repeat Contact Rate
+
+------------------------------------------------------------
+5.8 Knowledge Gap Detection
+------------------------------------------------------------
+
+Detect:
+
+- Unanswered questions.
+- Low-confidence retrieval.
+- High escalation topics.
+- Repeated searches.
+- Conflicting documents.
+- Outdated content.
+
+Generate documentation recommendations.
+
+============================================================
+6. TIER 3 — FLAGSHIP / ENTERPRISE
+============================================================
+
+6.1 AI Evaluation Framework
+------------------------------------------------------------
+
+Every sampled or selected response can be evaluated for:
+
+- Correctness.
+- Groundedness.
+- Relevance.
+- Completeness.
+- Policy compliance.
+- Tone.
+- Resolution probability.
+- Tool correctness.
+- Escalation correctness.
+
+Use:
+
+- LLM-as-a-Judge.
+- Deterministic rules.
+- Human review.
+- Golden datasets.
+
+Create regression test suites.
+
+------------------------------------------------------------
+6.2 Quiet Failure Detection
+------------------------------------------------------------
+
+Detect cases where AI appears successful but failed.
+
+Signals:
+
+- Ticket reopened.
+- Same issue repeated.
+- Customer contacted another channel.
+- Human solved later.
+- Customer churn signal.
+- Negative sentiment after response.
+- Customer abandonment.
+
+Create:
+
+True Resolution Rate
+Silent Failure Rate
+False Resolution Rate
+
+------------------------------------------------------------
+6.3 AI FinOps and Cost Management
+------------------------------------------------------------
+
+Track:
+
+- Total AI cost.
+- Cost per conversation.
+- Cost per ticket.
+- Cost per resolution.
+- Cost per successful resolution.
+- Cost by model.
+- Cost by tenant.
+- Cost by agent.
+- Cost by channel.
+
+Use model routing:
+
+Simple -> Low-cost model
+Complex -> Advanced model
+High-risk -> Advanced model + validation
+
+Add:
+
+- Daily budget limits.
+- Tenant budgets.
+- Cost anomaly detection.
+- Spend alerts.
+- Token budgets.
+- Context compression.
+- Caching.
+
+------------------------------------------------------------
+6.4 Model Routing
+------------------------------------------------------------
+
+A model router selects model based on:
+
+- Complexity.
+- Risk.
+- Required reasoning.
+- Latency target.
+- Cost budget.
+- Availability.
+
+Fallback:
+
+Primary model -> Secondary model -> Safe response -> Human
+
+------------------------------------------------------------
+6.5 Knowledge Intelligence
+------------------------------------------------------------
+
+Knowledge analytics:
+
+- Article usefulness.
+- Retrieval frequency.
+- Resolution contribution.
+- Freshness.
+- Conflict detection.
+- Missing topics.
+- Hallucination risk.
+
+Create a Knowledge Health Score.
+
+------------------------------------------------------------
+6.6 Incident Intelligence
+------------------------------------------------------------
+
+Correlate similar issues.
+
+Example:
+
+50 customers report:
+"API returning 500."
+
+System detects:
+
+- Same endpoint.
+- Same error.
+- Same time.
+- Same service.
+
+Create:
+
+Potential Incident
+
+Then:
+
+- Group tickets.
+- Alert support.
+- Notify stakeholders.
+- Provide consistent response.
+- Track affected customers.
+
+------------------------------------------------------------
+6.7 Support Operations Intelligence
+------------------------------------------------------------
+
+Daily report:
+
+Volume
+AI handled
+Human escalations
+True resolution
+False resolution
+SLA breaches
+Customer sentiment
+Top issues
+Knowledge gaps
+AI spend
+Cost per resolution
+Critical incidents
+
+Weekly/monthly:
+
+- Trends.
+- Support bottlenecks.
+- Product defects.
+- Documentation gaps.
+- Churn signals.
+- AI quality trends.
+
+------------------------------------------------------------
+6.8 AI Support Control Center
+------------------------------------------------------------
+
+Dashboard:
+
+Live:
+- Active conversations.
+- Running workflows.
+- Escalations.
+- Incidents.
+
+Quality:
+- Resolution rate.
+- Groundedness.
+- Hallucination risk.
+- Policy violations.
+
+Finance:
+- AI spend.
+- Cost per resolution.
+
+Knowledge:
+- Gaps.
+- Outdated docs.
+- Conflicts.
+
+Human:
+- Queue.
+- SLA.
+- Workload.
+
+------------------------------------------------------------
+6.9 Replay and Simulation Lab
+------------------------------------------------------------
+
+Replay historical conversations.
+
+Compare:
+
+Old outcome
+vs.
+New agent outcome
+
+Test:
+
+- New model.
+- New prompt.
+- New retrieval strategy.
+- New policy.
+- New tools.
+
+Before deployment, run regression tests.
+
+------------------------------------------------------------
+6.10 Continuous Improvement
+------------------------------------------------------------
+
+Pipeline:
+
+Conversation
+-> Evaluation
+-> Failure detection
+-> Root cause
+-> Recommendation
+-> Human approval
+-> Knowledge/prompt/policy update
+-> Regression evaluation
+-> Deployment
+
+The system should recommend changes but should not silently rewrite production behavior.
+
+------------------------------------------------------------
+6.11 Security and Governance
+------------------------------------------------------------
+
+Required:
+
+- Tenant isolation.
+- RBAC.
+- PII detection.
+- PII redaction.
+- Audit logs.
+- Data retention.
+- Tool permissions.
+- Prompt injection detection.
+- Knowledge poisoning protection.
+- Sensitive action approval.
+- Full execution trace.
+
+============================================================
+7. RECOMMENDED AGENT GRAPH
+============================================================
+
+High-level LangGraph:
+
+START
+ |
+ v
+Ingestion
+ |
+ v
+Tenant Validation
+ |
+ v
+Identity Resolution
+ |
+ v
+Conversation Memory
+ |
+ v
+Customer 360 Context
+ |
+ v
+Intent + Severity + Risk
+ |
+ v
+Route
+ |
+ +--> Simple FAQ
+ |
+ +--> Technical Diagnosis
+ |
+ +--> Billing
+ |
+ +--> Account
+ |
+ +--> Incident
+ |
+ +--> Security
+ |
+ +--> Human Escalation
+ |
+ v
+Knowledge Retrieval
+ |
+ v
+Evidence Validation
+ |
+ v
+Resolution Planning
+ |
+ v
+Action Authorization
+ |
+ +--> No Action
+ |
+ +--> Safe Action
+ |
+ +--> Human Approval
+ |
+ v
+Tool Execution
+ |
+ v
+Action Result Validation
+ |
+ v
+Response Generation
+ |
+ v
+Response Quality Check
+ |
+ +--> Fail -> Regenerate / Escalate
+ |
+ v
+Send Response
+ |
+ v
+Resolution Verification
+ |
+ +--> Resolved
+ |
+ +--> Follow-up
+ |
+ +--> Reopen
+ |
+ +--> Escalate
+ |
+ v
+Evaluation + Analytics
+ |
+ v
+END
+
+============================================================
+8. TECHNOLOGY STRATEGY
+============================================================
+
+PRIMARY BACKEND:
+
+Python
+FastAPI
+Pydantic
+PostgreSQL
+Redis
+
+ORCHESTRATION:
+
+LangGraph should be the primary orchestration framework.
+
+Reason:
+
+- Explicit state.
+- Conditional routing.
+- Durable workflows.
+- Human-in-the-loop.
+- Checkpointing.
+- Replay.
+- Complex branching.
+
+CrewAI can be used selectively where role-based multi-agent collaboration is useful, but it should not replace LangGraph as the main deterministic workflow engine.
+
+Use CrewAI only for specialized collaborative workflows if it provides real value.
+
+AI MODEL LAYER:
+
+Use the existing AI Gateway as the abstraction layer.
+
+Support multiple providers where practical:
+
+- OpenAI.
+- Google Gemini.
+- Anthropic Claude.
+- Local/open-source models where economically justified.
+
+The application should never call providers directly from business agents.
+
+DATABASE:
+
+PostgreSQL for:
+
+- Tenants.
+- Customers.
+- Conversations.
+- Tickets.
+- Decisions.
+- Tool executions.
+- Audit records.
+- Evaluations.
+- Metrics.
+
+Redis for:
+
+- Caching.
+- Rate limiting.
+- Short-lived state.
+- Event coordination.
+
+VECTOR / SEARCH:
+
+Recommended options:
+
+- PostgreSQL + pgvector for initial deployment.
+- Dedicated vector DB only when scale justifies it.
+
+Search should ideally combine:
+
+- Keyword.
+- Semantic.
+- Metadata.
+- Reranking.
+
+WORKFLOWS:
+
+n8n for:
+
+- External integrations.
+- Scheduled reports.
+- Email.
+- CRM synchronization.
+- Notifications.
+- Low-code business workflows.
+
+Core AI reasoning should remain inside Python/LangGraph.
+
+OBSERVABILITY:
+
+Recommended:
+
+- OpenTelemetry.
+- LangSmith or equivalent LLM tracing/evaluation platform where budget permits.
+- Prometheus/Grafana for infrastructure metrics.
+- Sentry for application errors.
+
+Use free tiers where they are genuinely sufficient, but design the application so these services can be swapped or self-hosted.
+
+TASK QUEUES:
+
+For lightweight workloads:
+
+- FastAPI BackgroundTasks initially.
+
+For production reliability:
+
+- Celery + Redis, or
+- Dramatiq, or
+- Temporal for durable long-running workflows.
+
+Temporal is the strongest enterprise option for critical durable workflows, but it increases operational complexity.
+
+DEPLOYMENT:
+
+Docker
+Docker Compose for development/small deployments.
+
+Production:
+
+- Managed PostgreSQL.
+- Redis.
+- Containerized FastAPI workers.
+- Separate worker processes.
+- Reverse proxy/load balancer.
+- Object storage for attachments.
+
+============================================================
+9. EXISTING PLATFORM REUSE MAP
+============================================================
+
+REUSE DIRECTLY:
+
+platform_core/ai_gateway.py
+-> All model calls.
+
+platform_core/audit.py
+-> AI and tool audit trail.
+
+platform_core/confidence.py
+-> Base confidence mechanism.
+
+platform_core/cost.py
+-> AI cost tracking.
+
+platform_core/db.py
+-> Database access.
+
+platform_core/decision_cards.py
+-> HITL.
+
+platform_core/evaluation.py
+-> Evaluation foundation.
+
+platform_core/events.py
+-> Event system.
+
+platform_core/knowledge.py
+-> Knowledge integration foundation.
+
+platform_core/memory.py
+-> Conversation/customer memory.
+
+platform_core/replay.py
+-> Replay and debugging.
+
+platform_core/sdk.py
+-> Central support agent interface.
+
+platform_core/security/tenant_isolation.py
+-> Tenant security.
+
+MUST BE EXTENDED:
+
+Confidence:
+Add risk-aware confidence, not only numeric confidence.
+
+Cost:
+Add cost per successful resolution and budget controls.
+
+Evaluation:
+Add support-specific evaluators and golden datasets.
+
+Knowledge:
+Add freshness, conflict, gap, and quality monitoring.
+
+Memory:
+Add customer 360 and cross-channel memory.
+
+Tools:
+Add permission policies, idempotency, result validation.
+
+Audit:
+Add complete support execution traces.
+
+Replay:
+Add simulation and regression testing.
+
+Dashboard:
+Add support intelligence views.
+
+============================================================
+10. PROPOSED DIRECTORY STRUCTURE
+============================================================
+
+business_agents/
+└── support/
+    ├── graph/
+    │   ├── support_graph.py
+    │   ├── routing.py
+    │   └── policies.py
+    │
+    ├── agents/
+    │   ├── intake_agent.py
+    │   ├── identity_agent.py
+    │   ├── customer_context_agent.py
+    │   ├── classification_agent.py
+    │   ├── diagnosis_agent.py
+    │   ├── knowledge_agent.py
+    │   ├── resolution_agent.py
+    │   ├── action_agent.py
+    │   ├── verification_agent.py
+    │   ├── escalation_agent.py
+    │   └── incident_agent.py
+    │
+    ├── evaluation/
+    │   ├── quality_evaluator.py
+    │   ├── groundedness.py
+    │   ├── hallucination_detector.py
+    │   ├── resolution_evaluator.py
+    │   └── quiet_failure.py
+    │
+    ├── knowledge/
+    │   ├── retrieval.py
+    │   ├── reranking.py
+    │   ├── freshness.py
+    │   ├── conflicts.py
+    │   └── gap_detection.py
+    │
+    ├── tools/
+    │   ├── billing.py
+    │   ├── crm.py
+    │   ├── tickets.py
+    │   ├── account.py
+    │   └── diagnostics.py
+    │
+    ├── analytics/
+    │   ├── metrics.py
+    │   ├── cost.py
+    │   ├── sla.py
+    │   ├── reports.py
+    │   └── trends.py
+    │
+    ├── state.py
+    ├── prompts.py
+    └── config.py
+
+============================================================
+11. KEY DATABASE ENTITIES
+============================================================
+
+Tenant
+Customer
+CustomerIdentity
+Account
+Subscription
+Conversation
+Message
+Ticket
+TicketEvent
+KnowledgeDocument
+KnowledgeVersion
+KnowledgeChunk
+KnowledgeConflict
+KnowledgeGap
+ToolDefinition
+ToolExecution
+ActionPolicy
+DecisionCard
+HumanEscalation
+Evaluation
+EvaluationScore
+ResolutionOutcome
+Incident
+IncidentCustomer
+SupportMetric
+CostEvent
+DailyReport
+AuditEvent
+
+============================================================
+12. CRITICAL SUPPORT METRICS
+============================================================
+
+Traditional:
+
+- First response time.
+- Average handling time.
+- Ticket volume.
+- Ticket deflection.
+
+Advanced:
+
+- AI resolution rate.
+- Verified resolution rate.
+- False resolution rate.
+- Repeat contact rate.
+- Reopen rate.
+- Escalation rate.
+- Escalation accuracy.
+- Knowledge grounding score.
+- Hallucination rate.
+- Policy violation rate.
+- Tool failure rate.
+- Customer sentiment.
+- SLA compliance.
+
+Financial:
+
+- AI cost per conversation.
+- AI cost per ticket.
+- AI cost per successful resolution.
+- Human cost avoided.
+- Cost by model.
+
+Knowledge:
+
+- Knowledge coverage.
+- Knowledge freshness.
+- Knowledge conflict rate.
+- Knowledge gap volume.
+
+============================================================
+13. DAILY ACTIVITY REPORT LOGIC
+============================================================
+
+Every 24 hours:
+
+1. Aggregate all support events.
+2. Calculate volume.
+3. Calculate AI vs human handling.
+4. Calculate verified resolutions.
+5. Detect false resolutions.
+6. Calculate escalations.
+7. Analyze sentiment.
+8. Analyze SLA.
+9. Analyze AI spend.
+10. Detect cost anomalies.
+11. Identify knowledge gaps.
+12. Identify top issue categories.
+13. Detect incident patterns.
+14. Generate report.
+15. Store report.
+16. Send to configured recipients.
+
+The report should clearly distinguish:
+
+"AI stated the issue was resolved"
+
+from:
+
+"Evidence indicates the customer was actually resolved."
+
+============================================================
+14. FLAGSHIP DIFFERENTIATORS
+============================================================
+
+The strongest differentiators should be:
+
+1. True Resolution Intelligence.
+2. Quiet Failure Detection.
+3. Safe Autonomous Actions.
+4. Customer 360 Context.
+5. Knowledge Health Intelligence.
+6. AI Support Evaluation Lab.
+7. AI FinOps.
+8. Incident Intelligence.
+9. Context-preserving human escalation.
+10. Continuous improvement loop.
+
+These are more defensible than simply saying:
+
+"AI chatbot with RAG."
+
+============================================================
+15. IMPLEMENTATION PHASES
+============================================================
+
+PHASE 1:
+Reuse platform_core.
+Build support state and graph.
+Add inbound ingestion.
+Add classification.
+Add customer context.
+Add RAG.
+Add response generation.
+Add HITL.
+Add ticket lifecycle.
+
+PHASE 2:
+Add tools.
+Add action policies.
+Add troubleshooting.
+Add human handoff.
+Add resolution verification.
+Add customer memory.
+
+PHASE 3:
+Add evaluation.
+Add LLM-as-a-Judge.
+Add knowledge health.
+Add quiet failure detection.
+Add daily reporting.
+
+PHASE 4:
+Add model routing.
+Add AI FinOps.
+Add proactive support.
+Add incident intelligence.
+Add support control center.
+
+PHASE 5:
+Add replay lab.
+Add regression testing.
+Add continuous improvement.
+Add enterprise governance.
+Add advanced omnichannel integrations.
+
+============================================================
+16. FINAL PRODUCT PRINCIPLE
+============================================================
+
+The Enterprise AI Support Agent should be treated as an AI employee with controlled autonomy.
+
+It should:
+
+UNDERSTAND
+-> DIAGNOSE
+-> RETRIEVE
+-> VERIFY
+-> ACT
+-> VERIFY
+-> RESOLVE
+-> ESCALATE WHEN NECESSARY
+-> MEASURE THE OUTCOME
+-> LEARN OPERATIONALLY
+
+The system must never optimize only for:
+
+"How many tickets did the AI avoid?"
+
+It must optimize for:
+
+"How many customers did we actually help, safely, correctly, and efficiently?"
+
+============================================================
+17. INFORMATION REQUIRED BEFORE FINAL IMPLEMENTATION
+============================================================
+
+Before writing production code, inspect the existing codebase in detail.
+
+The next technical discovery should verify:
+
+1. Actual implementation of ai_gateway.py.
+2. Actual SDK interfaces.
+3. Decision card state machine.
+4. Existing database schema.
+5. Memory storage implementation.
+6. Knowledge implementation.
+7. Existing tool registry.
+8. Existing event system.
+9. Replay capabilities.
+10. Evaluation implementation.
+11. Existing n8n workflows.
+12. Authentication and authorization.
+13. Current React dashboard APIs.
+14. Existing AI Email Intelligence Agent, if available.
+15. Existing external integrations.
+
+The final architecture should be based on actual implementation rather than assumptions from the architecture summary.
+
+END OF BRIEF
