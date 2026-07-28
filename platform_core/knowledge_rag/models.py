@@ -1,3 +1,9 @@
+"""
+platform_core/knowledge_rag/models.py
+
+SQLAlchemy models for multi-modal RAG knowledge ingestion and retrieval.
+"""
+
 from sqlalchemy import Column, Integer, Text, DateTime, Enum
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import declarative_base
@@ -27,7 +33,7 @@ class DocumentChunk(Base):
     chunk_type = Column(Enum(ChunkType), nullable=False)
     page_number = Column(Integer, nullable=False)
     embedding = Column(Vector(768))
-    metadata_ = Column("metadata", JSONB) # using metadata_ because metadata is a reserved property of Base
+    metadata_ = Column("metadata", JSONB)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class ExtractedTable(Base):
@@ -54,7 +60,7 @@ class Document(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     filename = Column(Text, nullable=False)
-    status = Column(Text, default="ingesting") # "ingesting", "ready", "failed"
+    status = Column(Text, default="ingesting")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class ChatSession(Base):
@@ -68,11 +74,11 @@ class QueryLog(Base):
     __tablename__ = 'query_logs'
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id = Column(UUID(as_uuid=True), nullable=True) # Soft link to chat_sessions
+    session_id = Column(UUID(as_uuid=True), nullable=True)
     question = Column(Text, nullable=False)
     retrieved_chunk_ids = Column(JSONB)
     answer = Column(Text)
     retrieval_method = Column(Enum(RetrievalMethod), nullable=False)
-    tokens_used = Column(Integer, default=0) # Cost tracking
-    confidence_score = Column(Integer, nullable=True) # Accuracy score from 0-100
+    tokens_used = Column(Integer, default=0)
+    confidence_score = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

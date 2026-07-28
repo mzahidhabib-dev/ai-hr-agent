@@ -56,20 +56,16 @@ def get(key: str, tenant_id: str) -> dict:
 def search_knowledge(query: str, tenant_id: str, top_k: int = 5) -> list:
     """
     Retrieves evidence chunks from the support knowledge base.
-    Integrates QA Bot hybrid search with fallback to operating playbooks.
+    Integrates multi-modal RAG hybrid search with fallback to operating playbooks.
     Enforces tenant isolation via @enforce_tenant.
     """
     logger.info("Searching support knowledge base", extra={"tenant_id": tenant_id, "query": query})
     
     results = []
     
-    # 1. Try multi-modal RAG hybrid search from QA bot
+    # 1. Try multi-modal RAG hybrid search
     try:
-        import sys
-        qa_bot_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "annual-report-qa-bot"))
-        if qa_bot_dir not in sys.path:
-            sys.path.insert(0, qa_bot_dir)
-        from src.retrieval.hybrid_search import search_with_self_query
+        from platform_core.knowledge_rag.retrieval.hybrid_search import search_with_self_query
         db_results = search_with_self_query(user_question=query, document_id=tenant_id, top_k=top_k)
         if db_results:
             for item in db_results:
@@ -81,7 +77,7 @@ def search_knowledge(query: str, tenant_id: str, top_k: int = 5) -> list:
                 })
             return results[:top_k]
     except Exception as e:
-        logger.warning(f"QA Bot Hybrid RAG search fallback: {e}")
+        logger.warning(f"Knowledge RAG hybrid search fallback: {e}")
 
     # 2. Fallback to tenant playbooks/SOPs in knowledge_data
     playbook_data = get("playbooks", tenant_id)
