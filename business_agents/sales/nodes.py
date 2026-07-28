@@ -514,13 +514,24 @@ def DraftOutreachAgent(state: dict) -> dict:
     summary = state["research_summary"]
     opp_det = state.get("opportunity_detection", "No specific opportunity detected.")
 
+    try:
+        tenant_profile = sdk.knowledge.get("tenant_profile", tenant_id)
+    except ValueError as e:
+        logger.warning(f"DraftOutreachAgent: invalid tenant profile JSON: {e}")
+        tenant_profile = {}
+        
+    sender_name = tenant_profile.get("sender_name", "AI Solutions Expert")
+    sender_role = tenant_profile.get("sender_role", "Founder")
+    company_name = tenant_profile.get("company_name", "Automation Agency")
+
     prompt = (
-        f"You are an expert Full-Stack Developer specializing in custom AI Agent development and workflow automation. "
+        f"You are {sender_name}, the {sender_role} at {company_name}. You specialize in custom AI Agent development and workflow automation. "
         f"Write a highly personalized, compelling B2B cold email to {dm.get('name', 'Executive')} ({dm.get('role', 'Leader')}). "
-        f"Offer custom AI Agent development and automated workflow solutions designed to save their business time, streamline operations, and eliminate manual tasks. "
+        f"Offer your company's custom AI Agent development and automated workflow solutions designed to save their business time, streamline operations, and eliminate manual tasks. "
         f"Use this research summary: {summary}. "
         f"Crucially, pitch this specific opportunity and use the recommended angle: \n{opp_det}\n"
-        f"Keep the email concise, punchy, professional, and end with a soft call to action for a 15-minute intro call. Do not use generic placeholders."
+        f"Keep the email concise, punchy, professional, and end with a soft call to action for a 15-minute intro call. "
+        f"Sign the email exactly as '{sender_name}', '{sender_role}' at '{company_name}'. DO NOT use any generic placeholders like [Your Name] or [Company Name]."
     )
     
     schema = {
@@ -639,6 +650,77 @@ def SendOutreachAgent(state: dict) -> dict:
 
     sdk.events.publish(tenant_id, "email.sent", {"to_email": email})
     return {"email_sent": True}
+
+
+@time_node("ReplyClassifierAgent")
+def ReplyClassifierAgent(state: dict) -> dict:
+    """
+    Classifies a prospect's reply into POSITIVE, NEGATIVE, or OBJECTION.
+    
+    Required state keys: tenant_id, prospect_reply
+    Sets state keys:     reply_classification, reply_reasoning
+    """
+    _require(state, "tenant_id", "prospect_reply")
+    tenant_id = state["tenant_id"]
+    agent = "ReplyClassifierAgent"
+    reply = state["prospect_reply"]
+    
+    prompt = (
+        f"You are an expert sales assistant. Analyze the following reply from a prospect:\n\n"
+        f"'{reply}'\n\n"
+        f"Classify the reply into exactly one of these categories:\n"
+        f"- POSITIVE: The prospect is interested, wants to meet, or is asking for availability.\n"
+        f"- NEGATIVE: The prospect is not interested, asking to unsubscribe, or saying no.\n"
+        f"- OBJECTION: The prospect has questions, needs more info, asks about pricing, or pushes back.\n"
+    )
+    
+    schema = {
+        "type": "object",
+        "properties": {
+            "classification": {"type": "string", "enum": ["POSITIVE", "NEGATIVE", "OBJECTION"]},
+            "reasoning": {"type": "string", "description": "Short explanation of why"}
+        },
+        "required": ["classification", "reasoning"]
+    }
+    
+    ai_res = sdk.ai.generate(prompt, schema=schema)
+    
+    if not ai_res.get("valid"):
+        err = f"Reply classification AI output invalid: {ai_res.get('error')}"
+        logger.error(f"{agent}: AI Gateway returned invalid response", extra={"tenant_id": tenant_id, "ai_error": ai_res.get("error")})
+        _publish_failure(tenant_id, agent, err)
+        raise RuntimeError(f"{agent}: {err}")
+        
+    cls = ai_res["output"]["classification"]
+    reason = ai_res["output"]["reasoning"]
+    
+    # Format the Markdown result for the Decision Card
+    result_md = (
+        f"**Reply Classification:** {cls}\n"
+        f"**Reasoning:** {reason}\n"
+        f"**Original Reply:** {reply}"
+    )
+    
+    try:
+        idx = state.get("current_prospect_index", 0)
+        prospects = state.get("prospects", [{}])
+        prospect_id = prospects[idx].get("prospect_id") if prospects else None
+        
+        sdk.decisions.record_decision(
+            tenant_id=tenant_id,
+            agent_name=agent,
+            action="classify_reply",
+            result=result_md,
+            prompt=prompt,
+            raw_output=ai_res.get("raw"),
+            cost_usd=ai_res.get("cost_usd"),
+            confidence=0.95,
+            prospect_id=prospect_id
+        )
+    except Exception as e:
+        logger.error(f"{agent}: record_decision failed", extra={"error": str(e)})
+        
+    return {"reply_classification": cls, "reply_reasoning": reason}
 
 
 @time_node("FollowUpAgent")

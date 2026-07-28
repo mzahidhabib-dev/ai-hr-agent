@@ -204,7 +204,7 @@ def get_decision(decision_id: int) -> dict:
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT decision_id, tenant_id, agent_name, action, result, approval_status FROM decision_cards WHERE decision_id = %s",
+            "SELECT decision_id, tenant_id, agent_name, action, result, approval_status, prospect_id FROM decision_cards WHERE decision_id = %s",
             (decision_id,)
         )
         row = cursor.fetchone()
@@ -217,7 +217,8 @@ def get_decision(decision_id: int) -> dict:
             "agent_name": row[2],
             "action": row[3],
             "result": row[4],
-            "approval_status": row[5]
+            "approval_status": row[5],
+            "prospect_id": row[6]
         }
     except Exception as e:
         logger.error("Failed to fetch decision card", extra={"decision_id": decision_id, "error": str(e)})

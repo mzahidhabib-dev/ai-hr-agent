@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -334,7 +334,7 @@ def list_decisions(
                 ORDER BY dm.decision_maker_id DESC LIMIT 1
             ) dm ON true
             WHERE d.tenant_id = %s AND (%s::text IS NULL OR d.approval_status = %s)
-            ORDER BY d.decision_id DESC LIMIT %s
+            ORDER BY CASE WHEN d.approval_status IN ('PENDING_APPROVAL', 'EDITED_PENDING') THEN 0 ELSE 1 END, d.decision_id DESC LIMIT %s
             """,
             (tenant_id, status, status, limit)
         )
@@ -381,8 +381,35 @@ def edit_decision(decision_id: int, body: DecisionActionRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+def dispatch_email_bg(decision_id: int, card: dict, target_email: str, new_result: str):
+    from platform_core.sdk import sdk
+    email_body = new_result if new_result else card.get("result", "")
+    
+    # Extract subject if present
+    subject_line = "Partnership Opportunity - Custom AI Agents & Automation"
+    lines = email_body.split("\n", 1)
+    if lines and lines[0].startswith("Subject: "):
+        subject_line = lines[0].replace("Subject: ", "").strip()
+        email_body = lines[1].strip() if len(lines) > 1 else ""
+        
+    # Format newlines as HTML breaks for n8n Gmail node
+    formatted_body = email_body.replace("\n", "<br>")
+        
+    # Dispatch via n8n
+    try:
+        sdk.tools.call(
+            "send_email",
+            tenant_id=card.get("tenant_id", "tenant-1"),
+            to_email=target_email,
+            subject=subject_line,
+            body=formatted_body
+        )
+    except Exception as e:
+        resolve_approval(decision_id, "FAILED")
+        print(f"Failed to dispatch email: {e}")
+
 @app.post("/api/decisions/{decision_id}/approve")
-def approve_decision(decision_id: int, body: Optional[DecisionActionRequest] = None):
+def approve_decision(decision_id: int, background_tasks: BackgroundTasks, body: Optional[DecisionActionRequest] = None):
     """
     Approves a decision card, saves any final edits, and triggers email dispatch via n8n.
     """
@@ -431,31 +458,8 @@ def approve_decision(decision_id: int, body: Optional[DecisionActionRequest] = N
                 if conn:
                     conn.close()
 
-            from platform_core.sdk import sdk
-            email_body = new_result if new_result else card.get("result", "")
-            
-            # Extract subject if present
-            subject_line = "Partnership Opportunity - Custom AI Agents & Automation"
-            lines = email_body.split("\n", 1)
-            if lines and lines[0].startswith("Subject: "):
-                subject_line = lines[0].replace("Subject: ", "").strip()
-                email_body = lines[1].strip() if len(lines) > 1 else ""
-                
-            # Format newlines as HTML breaks for n8n Gmail node
-            formatted_body = email_body.replace("\n", "<br>")
-                
-            # Dispatch via n8n
-            try:
-                sdk.tools.call(
-                    "send_email",
-                    tenant_id=tenant_id,
-                    to_email=target_email,
-                    subject=subject_line,
-                    body=formatted_body
-                )
-            except Exception as e:
-                resolve_approval(decision_id, "FAILED")
-                raise e
+            # Schedule the email dispatch in the background
+            background_tasks.add_task(dispatch_email_bg, decision_id, card, target_email, new_result)
             
         return {
             "status": "success", 
@@ -530,3 +534,103 @@ def n8n_delivery_webhook(payload: N8NDeliveryWebhook):
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+class ReplyWebhook(BaseModel):
+    tenant_id: str
+    prospect_email: str
+    reply_text: str
+
+def _handle_reply_in_background(tenant_id: str, prospect_email: str, reply_text: str):
+    import time
+    from platform_core.security.tenant_isolation import set_current_tenant
+    from platform_core.db import get_connection
+    from business_agents.sales.nodes import ReplyClassifierAgent, FollowUpAgent, MeetingAgent
+    
+    prospect_email = prospect_email.strip()
+    set_current_tenant(tenant_id)
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # 1. Look up the prospect by email (case-insensitive and trimmed)
+        cursor.execute(
+            """
+            SELECT p.prospect_id
+            FROM prospects p
+            JOIN decision_makers dm ON p.prospect_id = dm.prospect_id
+            WHERE p.tenant_id = %s AND LOWER(TRIM(dm.email)) = LOWER(TRIM(%s))
+            ORDER BY p.prospect_id DESC
+            LIMIT 1
+            """,
+            (tenant_id, prospect_email)
+        )
+        row = cursor.fetchone()
+        if not row:
+            print(f"Reply from {prospect_email} ignored - prospect not found.")
+            return
+        prospect_id = row[0]
+        
+        state = {
+            "tenant_id": tenant_id,
+            "prospects": [{"prospect_id": prospect_id}],
+            "current_prospect_index": 0,
+            "prospect_reply": reply_text
+        }
+        
+        # 2. Classify Reply
+        print(f"🤖 [AI Pipeline] Received reply from {prospect_email}. Classifying intent...")
+        state.update(ReplyClassifierAgent(state))
+        time.sleep(15) # Rate limit
+        
+        cls = state.get("reply_classification")
+        
+        # 3. Intelligent Routing
+        if cls == "POSITIVE":
+            # They want to meet! Trigger Booking
+            print(f"✅ [AI Pipeline] Intent classified as POSITIVE! Booking meeting...")
+            state.update(MeetingAgent(state))
+            cursor.execute("UPDATE prospects SET status = 'MEETING_BOOKED' WHERE prospect_id = %s", (prospect_id,))
+            print(f"🎉 [AI Pipeline] Meeting successfully booked and CRM updated!")
+        elif cls == "OBJECTION":
+            # Handle Objection
+            state.update(FollowUpAgent(state))
+            cursor.execute("UPDATE prospects SET status = 'FOLLOW_UP_SENT' WHERE prospect_id = %s", (prospect_id,))
+        elif cls == "NEGATIVE":
+            # Mark as rejected
+            cursor.execute("UPDATE prospects SET status = 'REJECTED' WHERE prospect_id = %s", (prospect_id,))
+            
+        # Automatically resolve any pending draft decision cards for this prospect since a reply has arrived
+        cursor.execute(
+            """
+            UPDATE decision_cards 
+            SET approval_status = 'APPROVED' 
+            WHERE prospect_id = %s AND approval_status IN ('PENDING_APPROVAL', 'EDITED_PENDING')
+            """,
+            (prospect_id,)
+        )
+
+        conn.commit()
+    except Exception as e:
+        import traceback
+        print("\n--- BACKGROUND REPLY PIPELINE FAILED ---")
+        traceback.print_exc()
+        print("----------------------------------------\n")
+    finally:
+        if conn:
+            conn.close()
+
+from fastapi import BackgroundTasks
+
+@app.post("/api/webhooks/reply")
+def reply_webhook(payload: ReplyWebhook, background_tasks: BackgroundTasks):
+    """
+    Webhook for n8n/Gmail to push incoming prospect replies.
+    """
+    background_tasks.add_task(
+        _handle_reply_in_background,
+        payload.tenant_id,
+        payload.prospect_email,
+        payload.reply_text
+    )
+    return {"status": "accepted", "message": "Reply queued for AI classification"}

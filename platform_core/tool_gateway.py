@@ -97,26 +97,21 @@ def update_crm(tenant_id: str, prospect_id: int, stage_id: str, value: float = 0
         conn = get_connection()
         cursor = conn.cursor()
         
-        # Check if opportunity exists
+        # Upsert opportunity
         cursor.execute(
-            "SELECT opportunity_id FROM opportunities WHERE tenant_id = %s AND prospect_id = %s",
-            (tenant_id, prospect_id)
+            """
+            INSERT INTO opportunities (tenant_id, prospect_id, stage_id, value) 
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (tenant_id, prospect_id) 
+            DO UPDATE SET 
+                stage_id = EXCLUDED.stage_id, 
+                value = EXCLUDED.value, 
+                updated_at = CURRENT_TIMESTAMP
+            RETURNING opportunity_id
+            """,
+            (tenant_id, prospect_id, stage_id, value)
         )
-        row = cursor.fetchone()
-        
-        if row:
-            opp_id = row[0]
-            cursor.execute(
-                "UPDATE opportunities SET stage_id = %s, value = %s, updated_at = CURRENT_TIMESTAMP WHERE opportunity_id = %s",
-                (stage_id, value, opp_id)
-            )
-        else:
-            cursor.execute(
-                "INSERT INTO opportunities (tenant_id, prospect_id, stage_id, value) VALUES (%s, %s, %s, %s) RETURNING opportunity_id",
-                (tenant_id, prospect_id, stage_id, value)
-            )
-            opp_id = cursor.fetchone()[0]
-            
+        opp_id = cursor.fetchone()[0]
         conn.commit()
         return opp_id
     except Exception as e:
