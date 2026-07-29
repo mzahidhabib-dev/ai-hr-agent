@@ -1,5 +1,19 @@
 from platform_core.logging_config import get_logger
 from platform_core.db import get_connection
+import json
+from platform_core.security.tenant_isolation import enforce_tenant
+from business_agents.support.tools.billing import (
+    lookup_customer_profile,
+    lookup_invoice,
+    resend_invoice,
+    process_refund,
+    change_subscription_plan
+)
+from business_agents.support.tools.diagnostics import (
+    query_api_usage_logs,
+    check_service_health,
+    run_account_config_diagnostics
+)
 
 logger = get_logger(__name__)
 
@@ -23,7 +37,6 @@ def research_company(tenant_id: str, domain: str) -> str:
     from platform_core.mcp_client import call_mcp_tool
     
     try:
-        # Command to launch our real python MCP scraper server
         cmd = "python"
         args = ["workers/web_research_mcp.py"]
         return call_mcp_tool(cmd, args, "research_company", {"tenant_id": tenant_id, "domain": domain})
@@ -38,7 +51,6 @@ def send_email(tenant_id: str, to_email: str, subject: str, body: str) -> bool:
     
     webhook_url = os.environ.get("N8N_WEBHOOK_URL")
     
-    # Rule 15: log to_email and subject only — never log email body (PII / content)
     if not webhook_url:
         print(f"\n[EMAIL DISPATCH STUB] No N8N_WEBHOOK_URL in .env. Would send email to: {to_email}\n")
         logger.info("Sending email (stub - no N8N_WEBHOOK_URL configured)", extra={"tenant_id": tenant_id, "to_email": to_email, "subject": subject})
@@ -83,8 +95,6 @@ def check_calendar_availability(tenant_id: str) -> list:
     return ["2026-07-20T10:00:00Z", "2026-07-21T14:00:00Z"]
 
 # --- IMPLEMENTED TOOLS ---
-import json
-from platform_core.security.tenant_isolation import enforce_tenant
 
 @enforce_tenant
 def update_crm(tenant_id: str, prospect_id: int, stage_id: str, value: float = 0.0) -> int:
@@ -98,7 +108,6 @@ def update_crm(tenant_id: str, prospect_id: int, stage_id: str, value: float = 0
         conn = get_connection()
         cursor = conn.cursor()
         
-        # Upsert opportunity
         cursor.execute(
             """
             INSERT INTO opportunities (tenant_id, prospect_id, stage_id, value) 
@@ -220,7 +229,15 @@ def call(tool_name: str, **kwargs):
         "check_calendar_availability": check_calendar_availability,
         "update_crm": update_crm,
         "record_handoff": record_handoff,
-        "record_support_handoff": record_support_handoff
+        "record_support_handoff": record_support_handoff,
+        "lookup_customer_profile": lookup_customer_profile,
+        "lookup_invoice": lookup_invoice,
+        "resend_invoice": resend_invoice,
+        "process_refund": process_refund,
+        "change_subscription_plan": change_subscription_plan,
+        "query_api_usage_logs": query_api_usage_logs,
+        "check_service_health": check_service_health,
+        "run_account_config_diagnostics": run_account_config_diagnostics
     }
     
     if tool_name not in tools:

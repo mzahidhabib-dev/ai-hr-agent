@@ -37,6 +37,7 @@ support_agent_tier3_roadmap.md
 annual-report-qa-bot/
 Enterprise_AI_Support_Agent_Detailed_Brief.txt
 rules.md
+tests/
 
 # Python
 __pycache__/
