@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  redis_hr:
+    image: redis/redis-stack-server:latest
+    container_name: hr_agent_redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_hr_data:/data
+    restart: unless-stopped
+
+  hr_agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.hr
+    container_name: enterprise_ai_hr_agent
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis_hr
+      - REDIS_PORT=6379
+    depends_on:
+      - redis_hr
+    restart: "no"
+    stdin_open: true
+    tty: true
+
+volumes:
+  redis_hr_data:

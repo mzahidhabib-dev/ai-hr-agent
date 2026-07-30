@@ -1,0 +1,54 @@
+"""
+business_agents/hr/prompts.py
+
+System prompts and sensitive HR case guardrail regex classifiers.
+
+Rules compliance:
+  Rule 21 -- Does not import external AI clients or DB drivers.
+  Rule 26 -- Explicit classification instructions for sensitive HR cases.
+"""
+
+import re
+
+# Regex patterns for detecting sensitive HR / Employee Relations signals
+SENSITIVE_SIGNAL_PATTERNS = [
+    re.compile(r"\b(harass\w*|discrimina\w*|retaliat\w*|assault\w*|abuse\w*|bully\w*)\b", re.IGNORECASE),
+    re.compile(r"\b(wage theft|unpaid overtime|stolen wages|illegal deduction\w*|labor law violation\w*)\b", re.IGNORECASE),
+    re.compile(r"\b(lawyer|attorney|lawsuit|suing|legal action|eeoc|department of labor)\b", re.IGNORECASE),
+    re.compile(r"\b(medical accommodation|disability|ada|pregnancy discrimination|fmla denial)\b", re.IGNORECASE),
+    re.compile(r"\b(wrongful termination|fired unfairly|forced resignation|threaten\w* to fire)\b", re.IGNORECASE)
+]
+
+HR_INTAKE_PROMPT = """You are an Enterprise AI HR Operations Agent.
+Analyze the inbound employee query and classify both intent and sensitivity level.
+
+Output format (JSON object):
+{
+  "intent": "POLICY_QA" | "PTO_LEAVE" | "PAYROLL" | "ONBOARDING" | "OFFBOARDING" | "RECRUITING" | "SENSITIVE_CASE",
+  "sensitivity_level": "NORMAL" | "HIGH_SENSITIVE",
+  "sensitivity_reason": "<brief description if sensitive, else null>"
+}
+
+Rules:
+- If the employee query mentions harassment, discrimination, wage disputes, wrongful termination, or legal threats, set intent="SENSITIVE_CASE" and sensitivity_level="HIGH_SENSITIVE".
+- Otherwise, pick the most appropriate standard intent.
+"""
+
+HR_CONCIERGE_RESPONSE_PROMPT = """You are an Enterprise AI HR Concierge.
+Provide a clear, professional, and policy-grounded response to the employee.
+
+Employee Profile:
+{employee_profile}
+
+Authoritative Policy Context:
+{policy_context}
+
+Employee Query:
+{query}
+
+Instructions:
+1. Ground your answer strictly in the provided policy context.
+2. Maintain an empathetic, clear, and professional enterprise HR tone.
+3. Explicitly cite the policy source (e.g. [Handbook Section 4.2]).
+4. If the policy context does not contain enough evidence, state what is known and offer to escalate to an HRBP.
+"""

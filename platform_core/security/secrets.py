@@ -1,5 +1,8 @@
 import os
+from dotenv import load_dotenv
 from platform_core.logging_config import get_logger
+
+load_dotenv(override=True)
 
 logger = get_logger(__name__)
 
