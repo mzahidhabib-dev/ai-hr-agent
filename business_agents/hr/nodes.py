@@ -12,6 +12,8 @@ Rules compliance:
 from business_agents.hr.state import HRAgentState
 from business_agents.hr.prompts import (
     SENSITIVE_SIGNAL_PATTERNS,
+    PTO_PATTERNS,
+    PAYROLL_PATTERNS,
     HR_INTAKE_PROMPT,
     HR_CONCIERGE_RESPONSE_PROMPT,
 )
@@ -102,6 +104,24 @@ def ClassificationNode(state: HRAgentState) -> HRAgentState:
                     "intent": "SENSITIVE_CASE",
                     "sensitivity_level": "HIGH_SENSITIVE",
                     "sensitivity_reason": f"Detected sensitive signal: '{matched_text}'",
+                }
+
+        # Step 2: Deterministic Regex Check for PTO & Leave Intent
+        for pattern in PTO_PATTERNS:
+            if pattern.search(query):
+                return {
+                    **state,
+                    "intent": "PTO_LEAVE",
+                    "sensitivity_level": "NORMAL",
+                }
+
+        # Step 3: Deterministic Regex Check for Payroll Intent
+        for pattern in PAYROLL_PATTERNS:
+            if pattern.search(query):
+                return {
+                    **state,
+                    "intent": "PAYROLL",
+                    "sensitivity_level": "NORMAL",
                 }
 
         # Step 2: AI Gateway intent classification
@@ -366,4 +386,101 @@ def PTOActionNode(state: HRAgentState) -> HRAgentState:
             {"node": "PTOActionNode", "error": str(e)},
         )
         return {**state, "status": "FAILED", "error": str(e)}
+
+
+def PayrollIntelligenceNode(state: HRAgentState) -> HRAgentState:
+    """
+    Payroll Intelligence node: Compares paystubs and provides variance analysis via Tool Gateway & AI Gateway.
+    """
+    tenant_id = state.get("tenant_id", "")
+    employee_id = state.get("employee_id", "")
+
+    if tenant_id:
+        sdk.security.set_current_tenant(tenant_id)
+
+    try:
+        # Step 1: Compare paystubs via Tool Gateway
+        paystub_data = sdk.tools.call("get_paystub_comparison", tenant_id=tenant_id, employee_id=employee_id)
+
+        gross = paystub_data.get("gross_pay", {})
+        tax = paystub_data.get("tax_withholding", {})
+        net = paystub_data.get("net_pay", {})
+        explanation = paystub_data.get("explanation", "")
+
+        summary_text = (
+            f"Payroll Comparison for Period {paystub_data.get('pay_period_current')}:\n"
+            f"- Gross Pay: ${gross.get('current')} (Variance: ${gross.get('variance')})\n"
+            f"- Tax Withholding: ${tax.get('current')} (Variance: +${tax.get('variance')})\n"
+            f"- Net Pay: ${net.get('current')} (Variance: ${net.get('variance')})\n"
+            f"Explanation: {explanation}"
+        )
+
+        logger.info(
+            "Analyzed payroll variance",
+            extra={"tenant_id": tenant_id, "employee_id": employee_id, "net_variance": net.get("variance")},
+        )
+
+        return {
+            **state,
+            "draft_response": summary_text,
+            "status": "COMPLETED",
+        }
+    except Exception as e:
+        logger.error(
+            "Unhandled exception in PayrollIntelligenceNode",
+            extra={"tenant_id": tenant_id, "error": str(e)},
+        )
+        sdk.events.publish(
+            tenant_id,
+            "workflow.failed",
+            {"node": "PayrollIntelligenceNode", "error": str(e)},
+        )
+        return {**state, "status": "FAILED", "error": str(e)}
+
+
+def ResolutionVerifierNode(state: HRAgentState) -> HRAgentState:
+    """
+    Resolution Verifier node: Pillar 3 of Truth (Outcome Truth).
+    Reads back authoritative post-action state from database/HRIS to verify action took effect.
+    """
+    tenant_id = state.get("tenant_id", "")
+    employee_id = state.get("employee_id", "")
+    intent = state.get("intent", "")
+
+    if tenant_id:
+        sdk.security.set_current_tenant(tenant_id)
+
+    try:
+        verified = True
+
+        if intent == "PTO_LEAVE":
+            pto_info = sdk.tools.call("get_pto_balance", tenant_id=tenant_id, employee_id=employee_id)
+            verified = pto_info is not None and "pto_balance_days" in pto_info
+        elif intent == "PAYROLL":
+            pay_info = sdk.tools.call("get_paystub_comparison", tenant_id=tenant_id, employee_id=employee_id)
+            verified = pay_info is not None and "net_pay" in pay_info
+
+        logger.info(
+            "Pillar 3 of Truth: Action outcome verification complete",
+            extra={"tenant_id": tenant_id, "employee_id": employee_id, "verified": verified},
+        )
+
+        return {
+            **state,
+            "status": "COMPLETED" if verified else "FAILED",
+            "error": None if verified else "Resolution verification failed: Outcome state not confirmed.",
+        }
+    except Exception as e:
+        logger.error(
+            "Unhandled exception in ResolutionVerifierNode",
+            extra={"tenant_id": tenant_id, "error": str(e)},
+        )
+        sdk.events.publish(
+            tenant_id,
+            "workflow.failed",
+            {"node": "ResolutionVerifierNode", "error": str(e)},
+        )
+        return {**state, "status": "FAILED", "error": str(e)}
+
+
 

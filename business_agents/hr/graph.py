@@ -18,6 +18,9 @@ from business_agents.hr.nodes import (
     KnowledgeRAGNode,
     SensitiveEscalationNode,
     ResponseNode,
+    PTOActionNode,
+    PayrollIntelligenceNode,
+    ResolutionVerifierNode,
 )
 from platform_core.sdk import sdk
 
@@ -28,6 +31,8 @@ def route_after_classification(state: HRAgentState) -> str:
     """
     Conditional router after classification:
     - SENSITIVE_CASE -> SensitiveEscalationNode
+    - PTO_LEAVE -> PTOActionNode
+    - PAYROLL -> PayrollIntelligenceNode
     - Otherwise -> KnowledgeRAGNode
     """
     intent = state.get("intent", "POLICY_QA")
@@ -39,6 +44,18 @@ def route_after_classification(state: HRAgentState) -> str:
             extra={"tenant_id": state.get("tenant_id"), "intent": intent},
         )
         return "SensitiveEscalationNode"
+    elif intent == "PTO_LEAVE":
+        logger.info(
+            "Routing to PTOActionNode",
+            extra={"tenant_id": state.get("tenant_id"), "intent": intent},
+        )
+        return "PTOActionNode"
+    elif intent == "PAYROLL":
+        logger.info(
+            "Routing to PayrollIntelligenceNode",
+            extra={"tenant_id": state.get("tenant_id"), "intent": intent},
+        )
+        return "PayrollIntelligenceNode"
     else:
         logger.info(
             "Routing to KnowledgeRAGNode",
@@ -59,6 +76,9 @@ def create_hr_graph():
     builder.add_node("KnowledgeRAGNode", KnowledgeRAGNode)
     builder.add_node("SensitiveEscalationNode", SensitiveEscalationNode)
     builder.add_node("ResponseNode", ResponseNode)
+    builder.add_node("PTOActionNode", PTOActionNode)
+    builder.add_node("PayrollIntelligenceNode", PayrollIntelligenceNode)
+    builder.add_node("ResolutionVerifierNode", ResolutionVerifierNode)
 
     # 2. Add Fixed Edges
     builder.add_edge(START, "IntakeNode")
@@ -70,14 +90,21 @@ def create_hr_graph():
         route_after_classification,
         {
             "SensitiveEscalationNode": "SensitiveEscalationNode",
+            "PTOActionNode": "PTOActionNode",
+            "PayrollIntelligenceNode": "PayrollIntelligenceNode",
             "KnowledgeRAGNode": "KnowledgeRAGNode",
         },
     )
 
-    # 4. Terminal Edges
+    # 4. Action Verification Edges (Pillar 3 of Truth)
+    builder.add_edge("PTOActionNode", "ResolutionVerifierNode")
+    builder.add_edge("PayrollIntelligenceNode", "ResolutionVerifierNode")
+
+    # 5. Terminal Edges
     builder.add_edge("KnowledgeRAGNode", "ResponseNode")
     builder.add_edge("ResponseNode", END)
+    builder.add_edge("ResolutionVerifierNode", END)
     builder.add_edge("SensitiveEscalationNode", END)
 
-    logger.info("Successfully compiled HR Agent LangGraph state machine")
+    logger.info("Successfully compiled HR Agent LangGraph state machine with Phase 2 routing")
     return builder.compile()

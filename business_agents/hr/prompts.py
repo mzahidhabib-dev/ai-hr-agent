@@ -19,6 +19,14 @@ SENSITIVE_SIGNAL_PATTERNS = [
     re.compile(r"\b(wrongful termination|fired unfairly|forced resignation|threaten\w* to fire)\b", re.IGNORECASE)
 ]
 
+PTO_PATTERNS = [
+    re.compile(r"\b(pto|vacation|leave request|submit pto|take time off|apply for leave|sick leave|time off request)\b", re.IGNORECASE)
+]
+
+PAYROLL_PATTERNS = [
+    re.compile(r"\b(paycheck|paystub|salary|gross pay|net pay|tax withholding|pay period|pay decrease|deduction|pay change)\b", re.IGNORECASE)
+]
+
 HR_INTAKE_PROMPT = """You are an Enterprise AI HR Operations Agent.
 Analyze the inbound employee query and classify both intent and sensitivity level.
 
