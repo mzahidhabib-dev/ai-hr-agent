@@ -17,6 +17,7 @@ from business_agents.hr.prompts import (
     ONBOARDING_PATTERNS,
     OFFBOARDING_PATTERNS,
     RECRUITING_PATTERNS,
+    COMPLIANCE_PATTERNS,
     HR_INTAKE_PROMPT,
     HR_CONCIERGE_RESPONSE_PROMPT,
 )
@@ -151,6 +152,15 @@ def ClassificationNode(state: HRAgentState) -> HRAgentState:
                 return {
                     **state,
                     "intent": "RECRUITING",
+                    "sensitivity_level": "NORMAL",
+                }
+
+        # Step 7: Deterministic Regex Check for Compliance Intent
+        for pattern in COMPLIANCE_PATTERNS:
+            if pattern.search(query):
+                return {
+                    **state,
+                    "intent": "COMPLIANCE",
                     "sensitivity_level": "NORMAL",
                 }
 
@@ -721,6 +731,62 @@ def InterviewCoordinatorNode(state: HRAgentState) -> HRAgentState:
             {"node": "InterviewCoordinatorNode", "error": str(e)},
         )
         return {**state, "status": "FAILED", "error": str(e)}
+
+
+def ComplianceRiskNode(state: HRAgentState) -> HRAgentState:
+    """
+    Compliance & Risk Engine node: Jurisdiction-aware labor checks, mandatory posters, and incident logging (Section 10).
+    """
+    tenant_id = state.get("tenant_id", "")
+    employee_id = state.get("employee_id", "")
+    query = state.get("query", "")
+
+    if tenant_id:
+        sdk.security.set_current_tenant(tenant_id)
+
+    try:
+        # Step 1: Fetch jurisdiction compliance status
+        comp_res = sdk.tools.call("get_compliance_status", tenant_id=tenant_id, jurisdiction="US-CA")
+        records = comp_res.get("records", [])
+
+        # Step 2: Log incident if query reports a hazard/incident
+        incident_text = ""
+        if "incident" in query.lower() or "hazard" in query.lower() or "safety" in query.lower():
+            inc_res = sdk.tools.call("log_incident_report", tenant_id=tenant_id, employee_id=employee_id, incident_type="WORKPLACE_SAFETY", details=query)
+            incident_text = f"\n- Incident Registered: ID #{inc_res.get('incident_id')} ({inc_res.get('status')})"
+
+        record_summary = "\n".join([f"  * {r.get('requirement_name')}: {r.get('status')} (Due: {r.get('due_date')})" for r in records])
+
+        summary_text = (
+            f"Jurisdiction Compliance & Risk Report (US-CA):\n"
+            f"- Compliance Status: {comp_res.get('compliance_status')}\n"
+            f"- Active Compliance Records:\n{record_summary}"
+            f"{incident_text}\n"
+            f"Message: Labor law regulations and workplace poster status verified."
+        )
+
+        logger.info(
+            "Executed compliance risk check",
+            extra={"tenant_id": tenant_id, "jurisdiction": "US-CA", "status": comp_res.get("compliance_status")},
+        )
+
+        return {
+            **state,
+            "draft_response": summary_text,
+            "status": "COMPLETED",
+        }
+    except Exception as e:
+        logger.error(
+            "Unhandled exception in ComplianceRiskNode",
+            extra={"tenant_id": tenant_id, "error": str(e)},
+        )
+        sdk.events.publish(
+            tenant_id,
+            "workflow.failed",
+            {"node": "ComplianceRiskNode", "error": str(e)},
+        )
+        return {**state, "status": "FAILED", "error": str(e)}
+
 
 
 

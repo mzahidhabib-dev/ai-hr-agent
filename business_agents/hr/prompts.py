@@ -39,6 +39,10 @@ RECRUITING_PATTERNS = [
     re.compile(r"\b(recruiting|candidate|resume|job application|screen candidate|schedule interview|reschedule interview)\b", re.IGNORECASE)
 ]
 
+COMPLIANCE_PATTERNS = [
+    re.compile(r"\b(compliance|labor law|workplace poster|osha|incident|hazard|safety issue|ethics report)\b", re.IGNORECASE)
+]
+
 HR_INTAKE_PROMPT = """You are an Enterprise AI HR Operations Agent.
 Analyze the inbound employee query and classify both intent and sensitivity level.
 

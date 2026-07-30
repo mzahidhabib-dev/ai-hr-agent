@@ -24,6 +24,7 @@ from business_agents.hr.nodes import (
     OffboardingOrchestratorNode,
     CandidateEvaluatorNode,
     InterviewCoordinatorNode,
+    ComplianceRiskNode,
     ResolutionVerifierNode,
 )
 from platform_core.sdk import sdk
@@ -40,6 +41,7 @@ def route_after_classification(state: HRAgentState) -> str:
     - ONBOARDING -> OnboardingOrchestratorNode
     - OFFBOARDING -> OffboardingOrchestratorNode
     - RECRUITING -> InterviewCoordinatorNode (if interview) else CandidateEvaluatorNode
+    - COMPLIANCE -> ComplianceRiskNode
     - Otherwise -> KnowledgeRAGNode
     """
     intent = state.get("intent", "POLICY_QA")
@@ -89,6 +91,12 @@ def route_after_classification(state: HRAgentState) -> str:
                 extra={"tenant_id": state.get("tenant_id"), "intent": intent},
             )
             return "CandidateEvaluatorNode"
+    elif intent == "COMPLIANCE":
+        logger.info(
+            "Routing to ComplianceRiskNode",
+            extra={"tenant_id": state.get("tenant_id"), "intent": intent},
+        )
+        return "ComplianceRiskNode"
     else:
         logger.info(
             "Routing to KnowledgeRAGNode",
@@ -115,6 +123,7 @@ def create_hr_graph():
     builder.add_node("OffboardingOrchestratorNode", OffboardingOrchestratorNode)
     builder.add_node("CandidateEvaluatorNode", CandidateEvaluatorNode)
     builder.add_node("InterviewCoordinatorNode", InterviewCoordinatorNode)
+    builder.add_node("ComplianceRiskNode", ComplianceRiskNode)
     builder.add_node("ResolutionVerifierNode", ResolutionVerifierNode)
 
     # 2. Add Fixed Edges
@@ -133,6 +142,7 @@ def create_hr_graph():
             "OffboardingOrchestratorNode": "OffboardingOrchestratorNode",
             "CandidateEvaluatorNode": "CandidateEvaluatorNode",
             "InterviewCoordinatorNode": "InterviewCoordinatorNode",
+            "ComplianceRiskNode": "ComplianceRiskNode",
             "KnowledgeRAGNode": "KnowledgeRAGNode",
         },
     )
@@ -144,6 +154,7 @@ def create_hr_graph():
     builder.add_edge("OffboardingOrchestratorNode", "ResolutionVerifierNode")
     builder.add_edge("CandidateEvaluatorNode", "ResolutionVerifierNode")
     builder.add_edge("InterviewCoordinatorNode", "ResolutionVerifierNode")
+    builder.add_edge("ComplianceRiskNode", "ResolutionVerifierNode")
 
     # 5. Terminal Edges
     builder.add_edge("KnowledgeRAGNode", "ResponseNode")
@@ -151,5 +162,5 @@ def create_hr_graph():
     builder.add_edge("ResolutionVerifierNode", END)
     builder.add_edge("SensitiveEscalationNode", END)
 
-    logger.info("Successfully compiled HR Agent LangGraph state machine with Phase 4 routing")
+    logger.info("Successfully compiled HR Agent LangGraph state machine with Phase 5 routing")
     return builder.compile()
