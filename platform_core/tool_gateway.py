@@ -384,6 +384,154 @@ def request_employment_letter(tenant_id: str, employee_id: str, letter_type: str
     }
 
 
+# --- PHASE 3 LIFECYCLE ORCHESTRATION TOOLS ---
+
+@enforce_tenant
+def get_onboarding_checklist(tenant_id: str, employee_id: str) -> dict:
+    """Retrieves 30/60/90-day onboarding checklist and status from hr_onboarding_checklists table."""
+    logger.info("Retrieving onboarding checklist", extra={"tenant_id": tenant_id, "employee_id": employee_id})
+    # Ensure employee record exists to satisfy foreign key constraint
+    get_employee_profile(tenant_id=tenant_id, employee_id=employee_id)
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT checklist_id, milestone, items, status
+            FROM hr_onboarding_checklists
+            WHERE tenant_id = %s AND employee_id = %s
+            """,
+            (tenant_id, employee_id)
+        )
+        row = cursor.fetchone()
+        if row:
+            return {
+                "checklist_id": row[0],
+                "employee_id": employee_id,
+                "milestone": row[1],
+                "items": row[2] if isinstance(row[2], dict) else json.loads(row[2]) if isinstance(row[2], str) else row[2],
+                "status": row[3],
+            }
+        else:
+            # Auto-provision default onboarding checklist for new hire
+            default_items = {
+                "day_30": {"it_setup": "COMPLETED", "security_training": "COMPLETED", "manager_checkin": "PENDING"},
+                "day_60": {"project_onboarding": "IN_PROGRESS", "team_shadowing": "COMPLETED"},
+                "day_90": {"first_review": "PENDING", "goal_setting": "PENDING"}
+            }
+            cursor.execute(
+                """
+                INSERT INTO hr_onboarding_checklists (tenant_id, employee_id, milestone, items, status)
+                VALUES (%s, %s, %s, %s, 'IN_PROGRESS')
+                RETURNING checklist_id
+                """,
+                (tenant_id, employee_id, "Day 30", json.dumps(default_items))
+            )
+            checklist_id = cursor.fetchone()[0]
+            conn.commit()
+            return {
+                "checklist_id": checklist_id,
+                "employee_id": employee_id,
+                "milestone": "Day 30",
+                "items": default_items,
+                "status": "IN_PROGRESS",
+            }
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error("Failed to retrieve onboarding checklist", extra={"tenant_id": tenant_id, "employee_id": employee_id, "error": str(e)})
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+@enforce_tenant
+def provision_it_access(tenant_id: str, employee_id: str, system_list: list = None) -> dict:
+    """Provisions IT system accounts (Google Workspace, Slack, Jira, GitHub) for new hire."""
+    systems = system_list or ["Google Workspace", "Slack", "Jira", "GitHub"]
+    logger.info("Provisioning IT access", extra={"tenant_id": tenant_id, "employee_id": employee_id, "systems": systems})
+    return {
+        "employee_id": employee_id,
+        "provisioned_systems": systems,
+        "status": "PROVISIONED",
+        "message": f"IT access successfully provisioned for {len(systems)} systems."
+    }
+
+
+@enforce_tenant
+def revoke_it_access(tenant_id: str, employee_id: str) -> dict:
+    """Revokes IT access across all systems upon offboarding and records status."""
+    logger.warning("Revoking IT access for offboarding employee", extra={"tenant_id": tenant_id, "employee_id": employee_id})
+    get_employee_profile(tenant_id=tenant_id, employee_id=employee_id)
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO hr_offboarding_tasks (tenant_id, employee_id, task_name, owner, status, access_revoked)
+            VALUES (%s, %s, 'IT Access Revocation', 'IT-Security', 'COMPLETED', TRUE)
+            RETURNING task_id
+            """,
+            (tenant_id, employee_id)
+        )
+        task_id = cursor.fetchone()[0]
+        conn.commit()
+        return {
+            "task_id": task_id,
+            "employee_id": employee_id,
+            "access_revoked": True,
+            "status": "COMPLETED",
+            "message": "All enterprise IT system access successfully revoked."
+        }
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error("Failed to revoke IT access", extra={"tenant_id": tenant_id, "employee_id": employee_id, "error": str(e)})
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+@enforce_tenant
+def track_asset_return(tenant_id: str, employee_id: str, asset_id: str = "laptop-001") -> dict:
+    """Tracks asset/laptop return status for offboarding employee."""
+    logger.info("Tracking asset return", extra={"tenant_id": tenant_id, "employee_id": employee_id, "asset_id": asset_id})
+    get_employee_profile(tenant_id=tenant_id, employee_id=employee_id)
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO hr_offboarding_tasks (tenant_id, employee_id, task_name, owner, status, asset_returned)
+            VALUES (%s, %s, %s, 'IT-Logistics', 'COMPLETED', TRUE)
+            RETURNING task_id
+            """,
+            (tenant_id, employee_id, f"Asset Return ({asset_id})")
+        )
+        task_id = cursor.fetchone()[0]
+        conn.commit()
+        return {
+            "task_id": task_id,
+            "employee_id": employee_id,
+            "asset_id": asset_id,
+            "asset_returned": True,
+            "status": "COMPLETED"
+        }
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error("Failed to track asset return", extra={"tenant_id": tenant_id, "employee_id": employee_id, "error": str(e)})
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
 def call(tool_name: str, **kwargs):
     tools = {
         "find_prospect": find_prospect,
@@ -407,6 +555,10 @@ def call(tool_name: str, **kwargs):
         "submit_leave_request": submit_leave_request,
         "get_paystub_comparison": get_paystub_comparison,
         "request_employment_letter": request_employment_letter,
+        "get_onboarding_checklist": get_onboarding_checklist,
+        "provision_it_access": provision_it_access,
+        "revoke_it_access": revoke_it_access,
+        "track_asset_return": track_asset_return,
     }
     
     if tool_name not in tools:

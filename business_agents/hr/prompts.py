@@ -27,6 +27,14 @@ PAYROLL_PATTERNS = [
     re.compile(r"\b(paycheck|paystub|salary|gross pay|net pay|tax withholding|pay period|pay decrease|deduction|pay change)\b", re.IGNORECASE)
 ]
 
+ONBOARDING_PATTERNS = [
+    re.compile(r"\b(onboarding|new hire|30 day review|60 day review|90 day review|orientation|setup laptop|onboard)\b", re.IGNORECASE)
+]
+
+OFFBOARDING_PATTERNS = [
+    re.compile(r"\b(offboarding|resignation|terminate access|revoke access|return laptop|exit interview|departing employee|offboard)\b", re.IGNORECASE)
+]
+
 HR_INTAKE_PROMPT = """You are an Enterprise AI HR Operations Agent.
 Analyze the inbound employee query and classify both intent and sensitivity level.
 

@@ -14,6 +14,8 @@ from business_agents.hr.prompts import (
     SENSITIVE_SIGNAL_PATTERNS,
     PTO_PATTERNS,
     PAYROLL_PATTERNS,
+    ONBOARDING_PATTERNS,
+    OFFBOARDING_PATTERNS,
     HR_INTAKE_PROMPT,
     HR_CONCIERGE_RESPONSE_PROMPT,
 )
@@ -121,6 +123,24 @@ def ClassificationNode(state: HRAgentState) -> HRAgentState:
                 return {
                     **state,
                     "intent": "PAYROLL",
+                    "sensitivity_level": "NORMAL",
+                }
+
+        # Step 4: Deterministic Regex Check for Onboarding Intent
+        for pattern in ONBOARDING_PATTERNS:
+            if pattern.search(query):
+                return {
+                    **state,
+                    "intent": "ONBOARDING",
+                    "sensitivity_level": "NORMAL",
+                }
+
+        # Step 5: Deterministic Regex Check for Offboarding Intent
+        for pattern in OFFBOARDING_PATTERNS:
+            if pattern.search(query):
+                return {
+                    **state,
+                    "intent": "OFFBOARDING",
                     "sensitivity_level": "NORMAL",
                 }
 
@@ -481,6 +501,110 @@ def ResolutionVerifierNode(state: HRAgentState) -> HRAgentState:
             {"node": "ResolutionVerifierNode", "error": str(e)},
         )
         return {**state, "status": "FAILED", "error": str(e)}
+
+
+def OnboardingOrchestratorNode(state: HRAgentState) -> HRAgentState:
+    """
+    Onboarding Orchestrator node: Coordinates new-hire 30/60/90-day checklist and IT account provisioning.
+    """
+    tenant_id = state.get("tenant_id", "")
+    employee_id = state.get("employee_id", "")
+
+    if tenant_id:
+        sdk.security.set_current_tenant(tenant_id)
+
+    try:
+        # Step 1: Fetch onboarding checklist via Tool Gateway
+        checklist = sdk.tools.call("get_onboarding_checklist", tenant_id=tenant_id, employee_id=employee_id)
+
+        # Step 2: Provision IT system access for new hire via Tool Gateway
+        it_res = sdk.tools.call("provision_it_access", tenant_id=tenant_id, employee_id=employee_id)
+
+        milestone = checklist.get("milestone", "Day 30")
+        items = checklist.get("items", {})
+
+        summary_text = (
+            f"Onboarding Status for Employee #{employee_id}:\n"
+            f"- Current Milestone Stage: {milestone}\n"
+            f"- IT Access Status: {it_res.get('status')} ({len(it_res.get('provisioned_systems', []))} systems provisioned)\n"
+            f"- Checklist Progress:\n"
+            f"  * 30-Day Setup: {items.get('day_30', {})}\n"
+            f"  * 60-Day Milestones: {items.get('day_60', {})}\n"
+            f"  * 90-Day Review: {items.get('day_90', {})}"
+        )
+
+        logger.info(
+            "Orchestrated onboarding workflow",
+            extra={"tenant_id": tenant_id, "employee_id": employee_id, "milestone": milestone},
+        )
+
+        return {
+            **state,
+            "draft_response": summary_text,
+            "status": "COMPLETED",
+        }
+    except Exception as e:
+        logger.error(
+            "Unhandled exception in OnboardingOrchestratorNode",
+            extra={"tenant_id": tenant_id, "error": str(e)},
+        )
+        sdk.events.publish(
+            tenant_id,
+            "workflow.failed",
+            {"node": "OnboardingOrchestratorNode", "error": str(e)},
+        )
+        return {**state, "status": "FAILED", "error": str(e)}
+
+
+def OffboardingOrchestratorNode(state: HRAgentState) -> HRAgentState:
+    """
+    Offboarding Orchestrator node: Coordinates access revocation and asset tracking for departing employees.
+    """
+    tenant_id = state.get("tenant_id", "")
+    employee_id = state.get("employee_id", "")
+
+    if tenant_id:
+        sdk.security.set_current_tenant(tenant_id)
+
+    try:
+        # Step 1: Revoke IT system access across all platforms via Tool Gateway
+        revoke_res = sdk.tools.call("revoke_it_access", tenant_id=tenant_id, employee_id=employee_id)
+
+        # Step 2: Track laptop/device asset return via Tool Gateway
+        asset_res = sdk.tools.call("track_asset_return", tenant_id=tenant_id, employee_id=employee_id, asset_id="company-laptop")
+
+        summary_text = (
+            f"Offboarding Status for Employee #{employee_id}:\n"
+            f"- IT System Access: {'REVOKED' if revoke_res.get('access_revoked') else 'PENDING'}\n"
+            f"- IT Revocation Task ID: {revoke_res.get('task_id')}\n"
+            f"- Asset Return Status: {'RETURNED' if asset_res.get('asset_returned') else 'PENDING'}\n"
+            f"- Asset Return Task ID: {asset_res.get('task_id')}\n"
+            f"Message: Offboarding compliance tasks logged successfully."
+        )
+
+        logger.warning(
+            "Orchestrated offboarding workflow and IT access revocation",
+            extra={"tenant_id": tenant_id, "employee_id": employee_id, "revoked": revoke_res.get("access_revoked")},
+        )
+
+        return {
+            **state,
+            "draft_response": summary_text,
+            "status": "COMPLETED",
+        }
+    except Exception as e:
+        logger.error(
+            "Unhandled exception in OffboardingOrchestratorNode",
+            extra={"tenant_id": tenant_id, "error": str(e)},
+        )
+        sdk.events.publish(
+            tenant_id,
+            "workflow.failed",
+            {"node": "OffboardingOrchestratorNode", "error": str(e)},
+        )
+        return {**state, "status": "FAILED", "error": str(e)}
+
+
 
 
 
