@@ -1,0 +1,729 @@
+ENTERPRISE AI HR OPERATIONS AGENT
+
+Detailed Client Requirements & Premium Product Specification
+
+July 2026 • Enterprise Scope
+
+1. Executive Client Requirement
+
+Build an autonomous, governed HR Operations Employee—not a generic HR chatbot. It must answer employee questions, retrieve live employee-specific data, execute authorized HR workflows, proactively detect HR work, coordinate people and enterprise systems, verify outcomes, preserve a complete audit trail, and provide HR leadership with operational intelligence.
+
+Core principle: the LLM may reason and recommend, but deterministic identity, authorization, policy, financial, employment-impact, security, privacy, and tenant controls must remain outside the model.
+
+2. Business Problems the Agent Must Solve
+
+Tier-1 HR inbox overload and repetitive employee questions.
+
+Slow employee response times and poor self-service.
+
+Fragmented, outdated, or conflicting HR knowledge.
+
+Manual PTO, leave, benefits, payroll, and document workflows.
+
+Resume screening and recruiter workload.
+
+Interview scheduling and last-minute rescheduling.
+
+Onboarding/offboarding coordination across HR, IT, payroll, security, and managers.
+
+Manual chasing for reviews, training, approvals, forms, and deadlines.
+
+Compliance and documentation gaps.
+
+Payroll and benefits investigation workload.
+
+Poor visibility into employee friction and recurring HR incidents.
+
+Sensitive HR/legal matters being incorrectly handled by automation.
+
+Poor visibility into AI quality, cost, risk, and actual outcomes.
+
+3. Users and Authorization
+
+Employees: own HR data and permitted self-service.
+
+Managers: authorized information for direct reports.
+
+HR/HRBP: broader employee and case operations.
+
+Recruiters: candidate and hiring workflows.
+
+Payroll/Benefits: domain-specific operations.
+
+Legal/Employee Relations: restricted sensitive cases.
+
+Executives: aggregated workforce and HR intelligence.
+
+Administrators: platform administration without unrestricted business-data access.
+
+Use deterministic RBAC + ABAC, resource ownership, organizational hierarchy, tenant isolation, and field-level authorization where necessary.
+
+4. Employee HR Concierge
+
+24/7 support through Slack, Microsoft Teams, web, email, and API; voice can be later.
+
+Identity-aware responses using employee profile, location, employment type, department, job level, and jurisdiction.
+
+Policy-backed answers with citations to authoritative sources.
+
+Live-data answers for PTO, benefits, documents, payroll, and workflow status.
+
+Automatic escalation when confidence, authorization, policy, or sensitivity thresholds fail.
+
+Conversation continuity across channels.
+
+5. HRIS and Enterprise Integration Layer
+
+Use a provider-neutral adapter architecture. Core agent logic must not contain vendor-specific API calls.
+
+HRIS: Workday, BambooHR, SAP SuccessFactors, ADP, UKG, Rippling.
+
+ATS: Greenhouse, Lever, and equivalent systems.
+
+Collaboration: Slack, Microsoft Teams.
+
+Calendars: Google Calendar, Microsoft 365/Outlook.
+
+Identity: SSO/OIDC/SAML and enterprise directory.
+
+Documents/e-signature and enterprise storage.
+
+Payroll and benefits providers through controlled adapters.
+
+IT/service-management systems for onboarding/offboarding.
+
+All capabilities must be exposed through a unified Tool Gateway.
+
+6. GoHighLevel (GHL) — Optional Integration
+
+GHL can be useful for communications, contact management, campaigns, and external workflow coordination when the client already uses it. It must not become the source of truth for payroll, benefits, compensation, or employment records.
+
+Optional GHL adapter for approved communications and contact workflows.
+
+Create/update contacts only where the business process requires it.
+
+Trigger approved communication/reminder workflows.
+
+Record relevant external communications.
+
+Apply the same tenant, authorization, audit, and policy controls.
+
+Keep HRIS/ATS/payroll systems authoritative for their data domains.
+
+Recommendation: make GHL an optional adapter, not a core dependency.
+
+7. Payroll Intelligence
+
+Compare current and previous paychecks.
+
+Explain taxes, deductions, retirement, bonuses, overtime, leave, and other permitted fields.
+
+Identify likely causes with evidence.
+
+Escalate disputed or uncertain cases.
+
+Protect sensitive payroll information with stronger authorization.
+
+Require verification/approval for bank, tax-withholding, compensation, or similar high-risk changes.
+
+8. Benefits and Leave Automation
+
+Answer benefits questions using policy plus live enrollment data.
+
+Handle qualifying-life-event workflows.
+
+Collect and validate required documentation.
+
+Submit authorized benefits changes and verify resulting state.
+
+Manage PTO/leave requests, cancellations, modifications, and deadlines.
+
+Proactively notify employees about expiring balances and missing documentation.
+
+9. Recruiting and Candidate Operations
+
+Parse resumes and structure evidence against objective job requirements.
+
+Provide transparent candidate-job matching and missing requirements.
+
+Do not make opaque employment decisions.
+
+Coordinate interviews across calendars and time zones.
+
+Automatically reschedule authorized changes.
+
+Send candidate communications for applications, scheduling, reminders, and missing information.
+
+Require recruiter approval for employment-impacting decisions.
+
+Detect potentially inappropriate or discriminatory screening criteria.
+
+10. Onboarding Orchestrator
+
+Create new-hire workflows from approved hiring events.
+
+Coordinate HRIS, payroll, benefits, background checks, IT, equipment, email, collaboration tools, security training, and manager tasks.
+
+Track owner, deadline, dependency, status, and evidence.
+
+Send reminders and escalate blockers.
+
+Verify resulting state instead of trusting an API response.
+
+Provide employee/manager checklists and 30/60/90-day milestones.
+
+11. Offboarding Orchestrator
+
+Validate approved termination/resignation and effective date.
+
+Coordinate payroll and benefits termination.
+
+Coordinate IT access revocation.
+
+Track devices/assets and knowledge transfer.
+
+Track exit interview and documentation.
+
+Verify critical state changes and escalate overdue access revocation.
+
+12. Manager Operations Agent
+
+Show overdue reviews, training, approvals, and lifecycle tasks.
+
+Answer authorized team questions.
+
+Send targeted reminders and escalations.
+
+Determine why a workflow is blocked before repeatedly nudging.
+
+Provide team-level HR summaries without exposing restricted information.
+
+13. Compliance and Deadline Monitor
+
+Monitor mandatory training, policy acknowledgements, certifications, documents, reviews, and jurisdiction-specific requirements.
+
+Track deadlines/expiration dates.
+
+Send progressive reminders and escalations.
+
+Maintain evidence of completion.
+
+14. Proactive HR Intelligence
+
+Detect approaching deadlines and incomplete workflows.
+
+Detect onboarding/offboarding blockers.
+
+Detect repeated payroll/benefits issues.
+
+Detect recurring employee questions and knowledge gaps.
+
+Detect recruiting/interview bottlenecks.
+
+Detect unusual request surges and operational incidents.
+
+Create notifications, tasks, or incidents from configurable rules.
+
+15. Employee Friction Radar
+
+Measure repeat contacts, handoffs, repetition, and employee effort.
+
+Cluster recurring problems by topic, department, location, process, and system.
+
+Identify high-friction HR processes.
+
+Recommend documentation or workflow improvements.
+
+Measure whether improvements reduce repeat contacts.
+
+16. HR Knowledge Governance and Multimodal RAG
+
+Ingest policies, handbooks, benefits documents, forms, process documentation, tables, and approved visual content.
+
+Hybrid vector + BM25 + metadata filtering + reranking.
+
+Document versioning and effective dates.
+
+Authority ranking for official vs informal content.
+
+Conflict and stale-document detection.
+
+Jurisdiction, employee-type, and department filtering.
+
+Evidence/citations for consequential answers.
+
+Human HR/legal review for unresolved policy conflicts.
+
+17. Sensitive HR / Employee Relations Guardrails
+
+Detect harassment, discrimination, retaliation, workplace violence, accommodation/medical, legal-threat, wage-dispute, and termination-dispute signals.
+
+Restrict access and responses by sensitivity.
+
+Preserve evidence and audit events.
+
+Route to authorized HR/legal personnel.
+
+Never autonomously adjudicate legal or employee-relations matters.
+
+18. HR Action Risk Engine
+
+Risk = action + actor role + target employee + data sensitivity + financial impact + employment impact + jurisdiction + identity confidence + security signals + policy
+
+Low-risk informational work may be autonomous.
+
+Routine permitted workflows may be autonomous after authorization.
+
+Financial, identity, compensation, employment-status, security, or legal-sensitive actions require stronger controls.
+
+Termination, compensation changes, and critical employee-relations actions require mandatory human approval.
+
+Natural language can never override deterministic policy.
+
+19. Tool Gateway and Action Verification
+
+Every external action passes through a centralized Tool Gateway.
+
+Gateway enforces authentication, authorization, tenant context, policy, idempotency, rate limits, and audit logging.
+
+LLM output cannot directly invoke privileged APIs.
+
+Side-effecting actions use deterministic idempotency keys.
+
+Read back authoritative state after execution and verify the intended result.
+
+Handle timeouts/ambiguous responses without duplicate actions.
+
+Record requested action, policy decision, execution result, verification, and approvals.
+
+20. Human-in-the-Loop Decision Center
+
+Decision cards for high-risk actions.
+
+Full context, evidence, policy evaluation, risk, proposed action, and expected outcome.
+
+Approve/reject/request-more-information.
+
+Optimistic locking against duplicate execution.
+
+Operator identity, timestamps, and audit history.
+
+Configurable mandatory decision reasons.
+
+21. Three Pillars of HR Truth
+
+Answer Truth — Was the HR information correct and grounded in authoritative evidence?
+
+Action Truth — Was the correct workflow/tool selected and executed according to policy?
+
+Outcome Truth — Did the employee/candidate/manager/process actually reach the intended final state?
+
+An HTTP 200 from an external API is not proof of success; authoritative post-action state must be verified.
+
+22. Quiet Failure and Resolution Attribution
+
+Detect apparently resolved cases that generate repeat contacts.
+
+Track reopen/recontact windows.
+
+Classify AI-assisted, human-assisted, self-resolved, incident-resolved, and unresolved outcomes.
+
+Measure employee effort and repetition.
+
+Separate apparent resolution from verified resolution.
+
+23. HR Incident Intelligence
+
+Cluster payroll issues, benefits failures, HRIS errors, unusual request surges, and other correlated events.
+
+Create incidents and associate affected employees/workflows.
+
+Notify responsible teams.
+
+Send authorized proactive status communications.
+
+Track resolution and post-incident knowledge updates.
+
+24. HR AI FinOps
+
+Track LLM, embedding, retrieval, workflow, and external API costs.
+
+Cost by tenant, department, workflow, model, intent, and lifecycle stage.
+
+Cost per case and cost per verified resolution.
+
+Budgets and alerts.
+
+Quality/risk/cost-aware model routing.
+
+Loop protection against excessive calls.
+
+25. Dynamic Model Router
+
+Route by complexity, sensitivity, latency, cost, and quality requirements.
+
+Use cheaper models for routine low-risk tasks.
+
+Use stronger models for complex reasoning.
+
+Never use model choice as a substitute for security/authorization.
+
+Record routing decisions for evaluation and FinOps.
+
+26. HR Evaluation Framework
+
+Answer quality, groundedness, and policy adherence.
+
+Tool-chain correctness.
+
+Escalation precision and recall.
+
+Resolution verification.
+
+Human override rate.
+
+Employee/candidate effort.
+
+Historical regression testing.
+
+Evaluation by workflow and risk class.
+
+27. Replay and Simulation Lab
+
+Replay anonymized historical cases.
+
+Compare agent versions before production changes.
+
+Test prompts, policies, models, RAG, routing, and tools.
+
+Detect regressions.
+
+Require human approval before production rollout.
+
+Maintain datasets by workflow and risk.
+
+28. Controlled Continuous Improvement
+
+Production Event → Evaluation → Gap Detection → Root Cause → Recommendation → Human Approval → Replay Regression → Production Release
+
+Generate recommendations for knowledge, prompt, workflow, and policy improvements.
+
+No unrestricted autonomous modification of production behavior.
+
+Require regression tests and approval for consequential changes.
+
+Version and roll back changes.
+
+29. Canonical HR Outcome Event
+
+Use one canonical event as the source of truth for evaluation, FinOps, reporting, incidents, and continuous improvement.
+
+tenant_id
+
+employee/candidate reference
+
+trace_id
+
+run_id
+
+conversation_id
+
+workflow_id
+
+action_id
+
+actor
+
+intent
+
+policy decision
+
+tool calls
+
+evidence
+
+risk classification
+
+human approval
+
+execution result
+
+verification result
+
+resolution attribution
+
+cost telemetry
+
+timestamps
+
+30. Security, Privacy, and Governance
+
+SSO/OIDC/SAML.
+
+RBAC + ABAC.
+
+Tenant isolation.
+
+Field-level access controls.
+
+PII/sensitive-data detection.
+
+Encryption in transit and at rest.
+
+Secrets management.
+
+Prompt-injection and indirect-injection defenses.
+
+Tool authorization and allowlists.
+
+Auditable action history.
+
+Retention/deletion policies.
+
+Data residency controls where required.
+
+Security event monitoring.
+
+Least-privilege credentials.
+
+31. Traceability and Audit
+
+tenant_id → trace_id → run_id → conversation_id → workflow_id → tool calls → policy decisions → human actions → final state
+
+Operators must be able to determine what happened, why it happened, what evidence was used, who approved it, which systems changed, whether the change was verified, and what it cost.
+
+32. Daily HR Operations Reporter
+
+Employee requests and verified resolution rate.
+
+False resolution and reopen rate.
+
+Escalation volume and precision.
+
+Onboarding/offboarding blockers.
+
+Recruiting bottlenecks.
+
+Compliance overdue items.
+
+Knowledge gaps and policy conflicts.
+
+Incidents.
+
+AI cost and cost per verified resolution.
+
+Human override rate.
+
+Top employee-friction patterns.
+
+33. React + TypeScript Enterprise Control Center
+
+HR operations overview.
+
+Employee case view.
+
+HITL decision queue.
+
+Employee lifecycle viewer.
+
+Onboarding/offboarding command center.
+
+Recruiting dashboard.
+
+Compliance dashboard.
+
+Incident center.
+
+Knowledge health.
+
+AI evaluation.
+
+FinOps.
+
+Trace/audit explorer.
+
+Role-based views.
+
+34. Recommended Tier Structure
+
+Tier 1 — Foundation
+
+Agent StateGraph
+
+Identity/authorization foundation
+
+Multimodal hybrid RAG
+
+Employee concierge
+
+HRIS adapter
+
+Case management
+
+Human escalation
+
+Audit/trace model
+
+Tier 2 — Autonomous HR Operations
+
+PTO/leave
+
+Payroll intelligence
+
+Benefits
+
+Documents
+
+Recruiting
+
+Interview scheduling
+
+Onboarding
+
+Offboarding
+
+Manager assistant
+
+Compliance
+
+Automated nudging
+
+Tier 3 — Flagship Intelligence
+
+Canonical outcome events
+
+Three Truth evaluation
+
+HR risk engine
+
+Quiet failure
+
+Incident intelligence
+
+Employee friction radar
+
+Policy conflict detection
+
+Hiring governance
+
+HR FinOps
+
+Dynamic routing
+
+Operations reporting
+
+Replay/simulation
+
+Tier 4 — Enterprise Governance
+
+PII controls
+
+RBAC/ABAC
+
+Field authorization
+
+Tenant isolation
+
+Prompt-injection defense
+
+Tool authorization
+
+Retention
+
+Audit
+
+Security monitoring
+
+HITL framework
+
+Tier 5 — Enterprise Control Center
+
+React/TypeScript console
+
+HITL center
+
+Lifecycle dashboard
+
+Recruiting dashboard
+
+Compliance dashboard
+
+AI quality
+
+FinOps
+
+Incident center
+
+Executive HR intelligence
+
+35. Acceptance Criteria
+
+Authoritative, versioned HR knowledge with evidence/citations.
+
+Employee-specific live data only after deterministic authorization.
+
+No LLM output can bypass Tool Gateway policy.
+
+High-risk actions require configured approval and audit.
+
+Side-effecting operations are idempotent.
+
+External actions are verified against authoritative post-action state.
+
+Cross-tenant and cross-employee negative tests pass.
+
+Sensitive cases are routed safely to authorized humans.
+
+Replay/regression tests pass before consequential production changes.
+
+Dashboards measure quality, outcome, risk, latency, and cost.
+
+Every consequential workflow is end-to-end traceable.
+
+Proactive monitors create tasks, nudges, and incidents without requiring an employee request.
+
+36. Recommended Technology Stack
+
+Python + FastAPI backend.
+
+LangGraph as primary stateful workflow engine; CrewAI selectively where multi-agent collaboration adds measurable value.
+
+PostgreSQL + pgvector.
+
+Redis plus durable event persistence.
+
+Hybrid RAG with reranking and metadata/authority filtering.
+
+Multi-provider AI gateway: OpenAI, Anthropic, Gemini, Groq.
+
+React + TypeScript frontend.
+
+Durable workflow/task execution for long-running workflows.
+
+Structured logs, traces, metrics, correlation IDs, and audit events.
+
+Docker/containerized deployment and secrets management.
+
+37. Explicit Non-Requirements
+
+A generic FAQ chatbot marketed as an HR agent.
+
+An LLM directly connected to privileged HR APIs.
+
+Autonomous termination, compensation, legal, or sensitive employee-relations decisions.
+
+Unversioned HR documentation treated as unquestioned truth.
+
+Silent background actions without audit trails.
+
+Vendor-specific logic embedded throughout the core agent.
+
+Success measured only by ticket deflection or conversation closure.
+
+Declaring success without real-world outcome verification.
+
+Uncontrolled self-modification of production prompts, policies, or workflows.
+
+38. Final Client Definition of Success
+
+The finished product should function as a governed digital HR operations employee: it understands employee and organizational context, retrieves authoritative knowledge, safely executes permitted workflows, proactively coordinates people and systems, verifies outcomes, escalates sensitive or uncertain cases to the right human, and demonstrates measurable improvements in HR response time, employee effort, operational throughput, compliance, quality, and cost.

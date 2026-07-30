@@ -6,41 +6,12 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-ai-employee-platform-master-spec.md
-ai-employee-platform-roadmap-phase-group-1.md
-ai-employee-platform-roadmap-phase-group-2-3.md
-ai-employee-platform-roadmap-phase-group-4-5.md
-test_phase2.py
-test_phase3.py
-test_phase4.py
-test_phase5.py
-test_phase6_memory.py
-test_phase7.py
-test_phase8.py
-test_phase9.py
-test_phase10.py
-test_phase10.py
-test_phase10_3.py
-test_phase11.py
-test_phase12.py
-test_phase13.py
-test_phase14.py
-test_phase15.py
-test_phase16.py
-test_phase17.py
-test_phase18.py
-test_n8n_email.py
-.env.example
-support_agent_tier1_roadmap.md
-support_agent_tier2_roadmap.md
-support_agent_tier3_roadmap.md
-annual-report-qa-bot/
-Enterprise_AI_Support_Agent_Detailed_Brief.txt
 rules.md
-tests/
-/dMy Porjects\AI Support Agent
-support_agent_tier4_roadmap.md
-dMy Porjectsai-support-agent
+roadmap/
+spec/
+test_*  
+.env.example
+Enterprise_AI_HR_Agent_Detailed_Brief.docx
 
 # Python
 __pycache__/
