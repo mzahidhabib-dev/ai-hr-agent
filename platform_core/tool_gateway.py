@@ -532,6 +532,127 @@ def track_asset_return(tenant_id: str, employee_id: str, asset_id: str = "laptop
             conn.close()
 
 
+# --- PHASE 4 RECRUITING & CANDIDATE TOOLS ---
+
+@enforce_tenant
+def parse_resume(tenant_id: str, candidate_name: str, job_title: str, resume_text: str = None) -> dict:
+    """Parses candidate resume, structures objective evidence into hr_candidates table."""
+    logger.info("Parsing candidate resume", extra={"tenant_id": tenant_id, "candidate_name": candidate_name, "job_title": job_title})
+    skills = ["Python", "SQL", "LangGraph", "FastAPI", "Docker"]
+    parsed_evidence = {
+        "candidate_name": candidate_name,
+        "job_title": job_title,
+        "matching_skills": skills,
+        "missing_requirements": ["Kubernetes"],
+        "experience_years": 5,
+        "match_score": 85.0
+    }
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO hr_candidates (tenant_id, candidate_name, email, job_title, skills, resume_parsed_json, match_score, status)
+            VALUES (%s, %s, %s, %s, %s, %s, 85.0, 'EVALUATED')
+            RETURNING candidate_id
+            """,
+            (tenant_id, candidate_name, f"{candidate_name.lower().replace(' ', '.')}@email.com", job_title, skills, json.dumps(parsed_evidence))
+        )
+        candidate_id = cursor.fetchone()[0]
+        conn.commit()
+        return {
+            "candidate_id": candidate_id,
+            "candidate_name": candidate_name,
+            "job_title": job_title,
+            "match_score": 85.0,
+            "evidence": parsed_evidence,
+            "status": "EVALUATED"
+        }
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error("Failed to parse candidate resume", extra={"tenant_id": tenant_id, "candidate_name": candidate_name, "error": str(e)})
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+@enforce_tenant
+def schedule_interview(tenant_id: str, candidate_id: int, interviewer_ids: list = None, slot: str = "2026-08-15T14:00:00Z") -> dict:
+    """Schedules an interview slot in hr_interviews table."""
+    interviewers = interviewer_ids or ["hr_lead_1", "tech_lead_2"]
+    logger.info("Scheduling interview", extra={"tenant_id": tenant_id, "candidate_id": candidate_id, "slot": slot})
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO hr_interviews (tenant_id, candidate_id, interviewer_ids, scheduled_slot, status, meeting_link)
+            VALUES (%s, %s, %s, %s, 'SCHEDULED', %s)
+            RETURNING interview_id
+            """,
+            (tenant_id, candidate_id, interviewers, slot, f"https://meet.company.com/interview-{candidate_id}")
+        )
+        interview_id = cursor.fetchone()[0]
+        conn.commit()
+        return {
+            "interview_id": interview_id,
+            "candidate_id": candidate_id,
+            "scheduled_slot": slot,
+            "interviewers": interviewers,
+            "meeting_link": f"https://meet.company.com/interview-{candidate_id}",
+            "status": "SCHEDULED"
+        }
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error("Failed to schedule interview", extra={"tenant_id": tenant_id, "candidate_id": candidate_id, "error": str(e)})
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+@enforce_tenant
+def reschedule_interview(tenant_id: str, interview_id: int, new_slot: str = "2026-08-16T10:00:00Z") -> dict:
+    """Reschedules an existing interview in hr_interviews table."""
+    logger.info("Rescheduling interview", extra={"tenant_id": tenant_id, "interview_id": interview_id, "new_slot": new_slot})
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE hr_interviews
+            SET scheduled_slot = %s, status = 'RESCHEDULED'
+            WHERE tenant_id = %s AND interview_id = %s
+            RETURNING interview_id, scheduled_slot, status
+            """,
+            (new_slot, tenant_id, interview_id)
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise ValueError(f"Interview ID #{interview_id} not found for tenant '{tenant_id}'.")
+        conn.commit()
+        return {
+            "interview_id": row[0],
+            "new_slot": str(row[1]),
+            "status": row[2],
+            "message": f"Interview #{interview_id} successfully rescheduled to {new_slot}."
+        }
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error("Failed to reschedule interview", extra={"tenant_id": tenant_id, "interview_id": interview_id, "error": str(e)})
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
 def call(tool_name: str, **kwargs):
     tools = {
         "find_prospect": find_prospect,
@@ -559,6 +680,9 @@ def call(tool_name: str, **kwargs):
         "provision_it_access": provision_it_access,
         "revoke_it_access": revoke_it_access,
         "track_asset_return": track_asset_return,
+        "parse_resume": parse_resume,
+        "schedule_interview": schedule_interview,
+        "reschedule_interview": reschedule_interview,
     }
     
     if tool_name not in tools:

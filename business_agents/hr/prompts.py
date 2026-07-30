@@ -35,6 +35,10 @@ OFFBOARDING_PATTERNS = [
     re.compile(r"\b(offboarding|resignation|terminate access|revoke access|return laptop|exit interview|departing employee|offboard)\b", re.IGNORECASE)
 ]
 
+RECRUITING_PATTERNS = [
+    re.compile(r"\b(recruiting|candidate|resume|job application|screen candidate|schedule interview|reschedule interview)\b", re.IGNORECASE)
+]
+
 HR_INTAKE_PROMPT = """You are an Enterprise AI HR Operations Agent.
 Analyze the inbound employee query and classify both intent and sensitivity level.
 

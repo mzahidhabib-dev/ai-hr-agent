@@ -22,6 +22,8 @@ from business_agents.hr.nodes import (
     PayrollIntelligenceNode,
     OnboardingOrchestratorNode,
     OffboardingOrchestratorNode,
+    CandidateEvaluatorNode,
+    InterviewCoordinatorNode,
     ResolutionVerifierNode,
 )
 from platform_core.sdk import sdk
@@ -37,10 +39,12 @@ def route_after_classification(state: HRAgentState) -> str:
     - PAYROLL -> PayrollIntelligenceNode
     - ONBOARDING -> OnboardingOrchestratorNode
     - OFFBOARDING -> OffboardingOrchestratorNode
+    - RECRUITING -> InterviewCoordinatorNode (if interview) else CandidateEvaluatorNode
     - Otherwise -> KnowledgeRAGNode
     """
     intent = state.get("intent", "POLICY_QA")
     sensitivity = state.get("sensitivity_level", "NORMAL")
+    query = state.get("query", "").lower()
 
     if intent == "SENSITIVE_CASE" or sensitivity == "HIGH_SENSITIVE":
         logger.warning(
@@ -72,6 +76,19 @@ def route_after_classification(state: HRAgentState) -> str:
             extra={"tenant_id": state.get("tenant_id"), "intent": intent},
         )
         return "OffboardingOrchestratorNode"
+    elif intent == "RECRUITING":
+        if "interview" in query or "schedule" in query or "reschedule" in query:
+            logger.info(
+                "Routing to InterviewCoordinatorNode",
+                extra={"tenant_id": state.get("tenant_id"), "intent": intent},
+            )
+            return "InterviewCoordinatorNode"
+        else:
+            logger.info(
+                "Routing to CandidateEvaluatorNode",
+                extra={"tenant_id": state.get("tenant_id"), "intent": intent},
+            )
+            return "CandidateEvaluatorNode"
     else:
         logger.info(
             "Routing to KnowledgeRAGNode",
@@ -96,6 +113,8 @@ def create_hr_graph():
     builder.add_node("PayrollIntelligenceNode", PayrollIntelligenceNode)
     builder.add_node("OnboardingOrchestratorNode", OnboardingOrchestratorNode)
     builder.add_node("OffboardingOrchestratorNode", OffboardingOrchestratorNode)
+    builder.add_node("CandidateEvaluatorNode", CandidateEvaluatorNode)
+    builder.add_node("InterviewCoordinatorNode", InterviewCoordinatorNode)
     builder.add_node("ResolutionVerifierNode", ResolutionVerifierNode)
 
     # 2. Add Fixed Edges
@@ -112,6 +131,8 @@ def create_hr_graph():
             "PayrollIntelligenceNode": "PayrollIntelligenceNode",
             "OnboardingOrchestratorNode": "OnboardingOrchestratorNode",
             "OffboardingOrchestratorNode": "OffboardingOrchestratorNode",
+            "CandidateEvaluatorNode": "CandidateEvaluatorNode",
+            "InterviewCoordinatorNode": "InterviewCoordinatorNode",
             "KnowledgeRAGNode": "KnowledgeRAGNode",
         },
     )
@@ -121,6 +142,8 @@ def create_hr_graph():
     builder.add_edge("PayrollIntelligenceNode", "ResolutionVerifierNode")
     builder.add_edge("OnboardingOrchestratorNode", "ResolutionVerifierNode")
     builder.add_edge("OffboardingOrchestratorNode", "ResolutionVerifierNode")
+    builder.add_edge("CandidateEvaluatorNode", "ResolutionVerifierNode")
+    builder.add_edge("InterviewCoordinatorNode", "ResolutionVerifierNode")
 
     # 5. Terminal Edges
     builder.add_edge("KnowledgeRAGNode", "ResponseNode")
@@ -128,5 +151,5 @@ def create_hr_graph():
     builder.add_edge("ResolutionVerifierNode", END)
     builder.add_edge("SensitiveEscalationNode", END)
 
-    logger.info("Successfully compiled HR Agent LangGraph state machine with Phase 3 routing")
+    logger.info("Successfully compiled HR Agent LangGraph state machine with Phase 4 routing")
     return builder.compile()

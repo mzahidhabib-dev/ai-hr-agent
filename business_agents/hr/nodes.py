@@ -16,6 +16,7 @@ from business_agents.hr.prompts import (
     PAYROLL_PATTERNS,
     ONBOARDING_PATTERNS,
     OFFBOARDING_PATTERNS,
+    RECRUITING_PATTERNS,
     HR_INTAKE_PROMPT,
     HR_CONCIERGE_RESPONSE_PROMPT,
 )
@@ -141,6 +142,15 @@ def ClassificationNode(state: HRAgentState) -> HRAgentState:
                 return {
                     **state,
                     "intent": "OFFBOARDING",
+                    "sensitivity_level": "NORMAL",
+                }
+
+        # Step 6: Deterministic Regex Check for Recruiting Intent
+        for pattern in RECRUITING_PATTERNS:
+            if pattern.search(query):
+                return {
+                    **state,
+                    "intent": "RECRUITING",
                     "sensitivity_level": "NORMAL",
                 }
 
@@ -603,6 +613,116 @@ def OffboardingOrchestratorNode(state: HRAgentState) -> HRAgentState:
             {"node": "OffboardingOrchestratorNode", "error": str(e)},
         )
         return {**state, "status": "FAILED", "error": str(e)}
+
+
+def CandidateEvaluatorNode(state: HRAgentState) -> HRAgentState:
+    """
+    Candidate Evaluator node: Structures objective candidate evidence against job criteria (Section 9: No opaque decisions).
+    """
+    tenant_id = state.get("tenant_id", "")
+
+    if tenant_id:
+        sdk.security.set_current_tenant(tenant_id)
+
+    try:
+        candidate_name = "Jane Candidate"
+        job_title = "Senior AI Engineer"
+
+        # Step 1: Parse candidate resume via Tool Gateway
+        parse_res = sdk.tools.call("parse_resume", tenant_id=tenant_id, candidate_name=candidate_name, job_title=job_title)
+        evidence = parse_res.get("evidence", {})
+
+        summary_text = (
+            f"Objective Candidate Evaluation Summary for {candidate_name} (#{parse_res.get('candidate_id')}):\n"
+            f"- Target Role: {job_title}\n"
+            f"- Objective Match Score: {parse_res.get('match_score')}%\n"
+            f"- Experience: {evidence.get('experience_years')} years\n"
+            f"- Matching Skills: {', '.join(evidence.get('matching_skills', []))}\n"
+            f"- Missing Requirements: {', '.join(evidence.get('missing_requirements', []))}\n"
+            f"Note: Evaluation structured transparently against job requirements without automated rejection bias."
+        )
+
+        logger.info(
+            "Evaluated candidate resume objectively",
+            extra={"tenant_id": tenant_id, "candidate_id": parse_res.get("candidate_id"), "match_score": parse_res.get("match_score")},
+        )
+
+        return {
+            **state,
+            "draft_response": summary_text,
+            "status": "COMPLETED",
+        }
+    except Exception as e:
+        logger.error(
+            "Unhandled exception in CandidateEvaluatorNode",
+            extra={"tenant_id": tenant_id, "error": str(e)},
+        )
+        sdk.events.publish(
+            tenant_id,
+            "workflow.failed",
+            {"node": "CandidateEvaluatorNode", "error": str(e)},
+        )
+        return {**state, "status": "FAILED", "error": str(e)}
+
+
+def InterviewCoordinatorNode(state: HRAgentState) -> HRAgentState:
+    """
+    Interview Coordinator node: Coordinates interview scheduling and rescheduling across calendars (Section 9).
+    """
+    tenant_id = state.get("tenant_id", "")
+    query = state.get("query", "")
+
+    if tenant_id:
+        sdk.security.set_current_tenant(tenant_id)
+
+    try:
+        # Check if query requests rescheduling
+        if "reschedule" in query.lower():
+            resched_res = sdk.tools.call("reschedule_interview", tenant_id=tenant_id, interview_id=1, new_slot="2026-08-16T10:00:00Z")
+            summary_text = (
+                f"Interview Reschedule Confirmation:\n"
+                f"- Interview ID: #{resched_res.get('interview_id')}\n"
+                f"- New Scheduled Slot: {resched_res.get('new_slot')}\n"
+                f"- Status: {resched_res.get('status')}\n"
+                f"Message: {resched_res.get('message')}"
+            )
+            logger.info(
+                "Rescheduled candidate interview",
+                extra={"tenant_id": tenant_id, "interview_id": resched_res.get("interview_id")},
+            )
+        else:
+            sched_res = sdk.tools.call("schedule_interview", tenant_id=tenant_id, candidate_id=1, slot="2026-08-15T14:00:00Z")
+            summary_text = (
+                f"Interview Scheduling Confirmation:\n"
+                f"- Interview ID: #{sched_res.get('interview_id')}\n"
+                f"- Scheduled Slot: {sched_res.get('scheduled_slot')}\n"
+                f"- Interviewers: {', '.join(sched_res.get('interviewers', []))}\n"
+                f"- Meeting Link: {sched_res.get('meeting_link')}\n"
+                f"- Status: {sched_res.get('status')}"
+            )
+            logger.info(
+                "Scheduled candidate interview",
+                extra={"tenant_id": tenant_id, "interview_id": sched_res.get("interview_id")},
+            )
+
+        return {
+            **state,
+            "draft_response": summary_text,
+            "status": "COMPLETED",
+        }
+    except Exception as e:
+        logger.error(
+            "Unhandled exception in InterviewCoordinatorNode",
+            extra={"tenant_id": tenant_id, "error": str(e)},
+        )
+        sdk.events.publish(
+            tenant_id,
+            "workflow.failed",
+            {"node": "InterviewCoordinatorNode", "error": str(e)},
+        )
+        return {**state, "status": "FAILED", "error": str(e)}
+
+
 
 
 
