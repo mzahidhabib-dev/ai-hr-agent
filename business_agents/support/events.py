@@ -18,7 +18,8 @@ Rules compliance:
 """
 
 import time
-from typing import Dict, Any, List
+import uuid
+from typing import Dict, Any, List, Optional
 from platform_core.logging_config import get_logger
 from platform_core.security.tenant_isolation import enforce_tenant
 from platform_core.sdk import sdk
@@ -33,6 +34,9 @@ def publish_support_outcome_event(
     customer_id: str,
     initial_intent: str,
     severity: str,
+    trace_id: Optional[str] = None,
+    run_id: Optional[str] = None,
+    conversation_id: Optional[str] = None,
     ai_handled: bool = True,
     human_handled: bool = False,
     actions_taken: List[str] = None,
@@ -52,12 +56,29 @@ def publish_support_outcome_event(
     if actions_taken is None:
         actions_taken = []
         
-    logger.info("Publishing canonical SupportOutcomeEvent", extra={"tenant_id": tenant_id, "ticket_id": ticket_id, "outcome": final_outcome})
+    trace_id = trace_id or f"tr-{uuid.uuid4().hex[:12]}"
+    run_id = run_id or f"run-{uuid.uuid4().hex[:12]}"
+    conversation_id = conversation_id or f"conv-{uuid.uuid4().hex[:12]}"
+        
+    logger.info(
+        "Publishing canonical SupportOutcomeEvent",
+        extra={
+            "tenant_id": tenant_id,
+            "ticket_id": ticket_id,
+            "trace_id": trace_id,
+            "run_id": run_id,
+            "conversation_id": conversation_id,
+            "outcome": final_outcome
+        }
+    )
     
     payload = {
         "ticket_id": ticket_id,
         "tenant_id": tenant_id,
         "customer_id": customer_id,
+        "trace_id": trace_id,
+        "run_id": run_id,
+        "conversation_id": conversation_id,
         "initial_intent": initial_intent,
         "severity": severity,
         "ai_handled": ai_handled,

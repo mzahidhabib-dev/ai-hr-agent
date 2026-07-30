@@ -15,8 +15,10 @@ class SupportState(TypedDict, total=False):
     """
     The complete state object maintained throughout the Support Agent pipeline execution.
     """
-    # Core Metadata
+    # Core Metadata & Traceability IDs
     tenant_id: str
+    trace_id: Optional[str]
+    run_id: Optional[str]
     conversation_id: Optional[str]
     customer_id: Optional[str]
     external_message_id: Optional[str]  # For inbound webhook message deduplication

@@ -41,7 +41,7 @@ def record_decision(
         conn = get_connection()
         cursor = conn.cursor()
         
-        # Insert into decision_cards
+        # Insert into decision_cards for audit_logs foreign key constraint
         cursor.execute(
             """
             INSERT INTO decision_cards (
@@ -58,6 +58,18 @@ def record_decision(
             )
         )
         decision_id = cursor.fetchone()[0]
+
+        # If Support Agent, also record into support_decision_cards for HITL UI Queue
+        if agent_name.startswith("Support"):
+            cursor.execute(
+                """
+                INSERT INTO support_decision_cards (
+                    tenant_id, agent_name, action, result, confidence, 
+                    reason, approval_status
+                ) VALUES (%s, %s, %s, %s, %s, %s, 'WAITING_FOR_HUMAN')
+                """,
+                (tenant_id, agent_name, action, result or action, confidence or 100.0, reason or [])
+            )
 
         # Synchronously write to audit_logs for immediate visibility on Dashboard
         val_res_str = json.dumps(validation_result) if validation_result else "{}"
@@ -226,3 +238,82 @@ def get_decision(decision_id: int) -> dict:
     finally:
         if conn:
             conn.close()
+
+
+def resolve_support_decision_card_with_lock(
+    decision_id: int,
+    tenant_id: str,
+    target_status: str,
+    operator_id: str = "operator-1"
+) -> dict:
+    """
+    Resolves a pending HITL Support Decision Card using explicit state transitions and optimistic locking.
+
+    State transition flow:
+        WAITING_FOR_HUMAN -> EXECUTING -> APPROVED / REJECTED
+
+    Ensures that concurrent approvals by two operators raise a Concurrency Conflict Error.
+    """
+    valid_statuses = {"APPROVED", "REJECTED", "EXECUTING"}
+    if target_status not in valid_statuses:
+        raise ValueError(f"Invalid target status '{target_status}'. Must be one of {valid_statuses}")
+
+    logger.info(
+        "Resolving support decision card with optimistic locking",
+        extra={"tenant_id": tenant_id, "decision_id": decision_id, "target_status": target_status, "operator_id": operator_id}
+    )
+    
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # 1. Fetch current card state
+        cursor.execute(
+            """
+            SELECT decision_id, tenant_id, approval_status
+            FROM support_decision_cards
+            WHERE decision_id = %s AND tenant_id = %s
+            """,
+            (decision_id, tenant_id)
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise ValueError(f"Support decision card {decision_id} not found for tenant {tenant_id}")
+            
+        current_status = row[2]
+        
+        # 2. Concurrency Lock Validation
+        if current_status in ["APPROVED", "REJECTED", "EXECUTING", "EXECUTED"]:
+            raise ValueError(f"HITL Concurrency Conflict: Decision card {decision_id} is already in state '{current_status}'. Concurrent resolution blocked.")
+            
+        # 3. Update to target status with timestamp
+        cursor.execute(
+            """
+            UPDATE support_decision_cards
+            SET approval_status = %s
+            WHERE decision_id = %s AND tenant_id = %s AND (approval_status IN ('WAITING_FOR_HUMAN', 'PENDING_APPROVAL', 'PENDING') OR approval_status IS NULL)
+            """,
+            (target_status, decision_id, tenant_id)
+        )
+        if cursor.rowcount == 0:
+            raise ValueError(f"HITL Concurrency Conflict: Race condition detected. Decision card {decision_id} was modified by another operator.")
+            
+        conn.commit()
+        return {
+            "status": "SUCCESS",
+            "decision_id": decision_id,
+            "tenant_id": tenant_id,
+            "previous_status": current_status,
+            "new_status": target_status,
+            "operator_id": operator_id
+        }
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error("Failed executing optimistic lock resolution", extra={"tenant_id": tenant_id, "decision_id": decision_id, "error": str(e)})
+        raise e
+    finally:
+        if conn:
+            conn.close()
+

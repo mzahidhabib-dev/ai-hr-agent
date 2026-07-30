@@ -187,17 +187,21 @@ def _get_or_create_default_prospect(cursor, tenant_id: str) -> int:
 
 @enforce_tenant
 def record_support_handoff(tenant_id: str, conversation_id: str, handoff_package: dict) -> int:
-    """Writes a support handoff record package to the Postgres `handoffs` table."""
+    """Writes a support handoff record package to the Postgres `support_handoffs` table."""
     logger.info("Recording support human handoff", extra={"tenant_id": tenant_id, "conversation_id": conversation_id})
     conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        prospect_id = _get_or_create_default_prospect(cursor, tenant_id)
-        summary_json = json.dumps({"conversation_id": conversation_id, "package": handoff_package})
+        diag_summary = handoff_package.get("diagnosis", "") or handoff_package.get("issue_summary", "") or "Human Escalation Handoff Brief"
+        summary_json = json.dumps(handoff_package)
         cursor.execute(
-            "INSERT INTO handoffs (tenant_id, prospect_id, summary) VALUES (%s, %s, %s) RETURNING handoff_id",
-            (tenant_id, prospect_id, summary_json)
+            """
+            INSERT INTO support_handoffs (tenant_id, diagnostic_summary, handoff_package, status)
+            VALUES (%s, %s, %s, 'WAITING_FOR_HUMAN')
+            RETURNING handoff_id
+            """,
+            (tenant_id, diag_summary, summary_json)
         )
         handoff_id = cursor.fetchone()[0]
         conn.commit()
@@ -220,7 +224,9 @@ def record_support_handoff(tenant_id: str, conversation_id: str, handoff_package
             conn.close()
 
 def call(tool_name: str, **kwargs):
-    """Dynamically dispatches to the tool by name."""
+    """
+    Dynamically dispatches to the tool by name with deterministic Policy Engine & Idempotency enforcement.
+    """
     tools = {
         "find_prospect": find_prospect,
         "find_decision_maker": find_decision_maker,
@@ -242,5 +248,41 @@ def call(tool_name: str, **kwargs):
     
     if tool_name not in tools:
         raise ValueError(f"Unknown tool: {tool_name}")
+
+    # Deterministic Policy Boundary Enforcement for Side-Effect Tools
+    if tool_name in ["process_refund", "change_subscription_plan", "delete_account"]:
+        tenant_id = kwargs.get("tenant_id", "default")
+        from business_agents.support.policies import evaluate_action_policy
+        
+        policy_res = evaluate_action_policy(
+            tenant_id=tenant_id,
+            action_type=tool_name,
+            action_params=kwargs
+        )
+        if policy_res.requires_decision_card or policy_res.approval_status != "AUTONOMOUS":
+            logger.warning(
+                "Tool Gateway Policy Block: Natural-language prompt attempt bypassed to HITL queue",
+                extra={"tenant_id": tenant_id, "tool_name": tool_name, "reason": policy_res.reason}
+            )
+            raise PermissionError(f"Security Policy Boundary: Action '{tool_name}' requires human operator approval. Reason: {policy_res.reason}")
+
+        # Deterministic Idempotency Enforcement
+        ticket_id = kwargs.get("ticket_id", "t-000")
+        request_id = kwargs.get("request_id", "req-000")
+        from platform_core.security.idempotency import generate_idempotency_key, record_action_execution_start, record_action_execution_complete
+        
+        id_key = generate_idempotency_key(tenant_id, ticket_id, tool_name, request_id)
+        record_action_execution_start(tenant_id, id_key, tool_name, kwargs)
+        
+        # Filter kwargs to match underlying function signature
+        import inspect
+        target_fn = tools[tool_name]
+        sig = inspect.signature(target_fn)
+        valid_params = set(sig.parameters.keys())
+        exec_kwargs = {k: v for k, v in kwargs.items() if k in valid_params}
+        
+        res = target_fn(**exec_kwargs)
+        record_action_execution_complete(tenant_id, id_key, res if isinstance(res, dict) else {"result": str(res)})
+        return res
         
     return tools[tool_name](**kwargs)

@@ -147,31 +147,19 @@ def get_pending_decision_cards(tenant_id: str = Depends(get_tenant_id)):
 
 @app.post("/v1/support/decisions/{decision_id}/approve")
 def approve_decision_card(decision_id: int, req: DecisionApproveRequest, tenant_id: str = Depends(get_tenant_id)):
-    """Approves or rejects a pending HITL Decision Card."""
+    """Approves or rejects a pending HITL Decision Card with optimistic locking & concurrency protection."""
     set_current_tenant(tenant_id)
-    conn = None
     try:
         new_status = "APPROVED" if req.approved else "REJECTED"
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            UPDATE support_decision_cards
-            SET approval_status = %s
-            WHERE decision_id = %s AND tenant_id = %s
-            """,
-            (new_status, decision_id, tenant_id)
-        )
-        conn.commit()
-        return {"status": "SUCCESS", "decision_id": decision_id, "approval_status": new_status}
+        from platform_core.decision_cards import resolve_support_decision_card_with_lock
+        res = resolve_support_decision_card_with_lock(decision_id, tenant_id, new_status)
+        return {"status": "SUCCESS", "decision_id": decision_id, "approval_status": new_status, "details": res}
+    except ValueError as ve:
+        logger.warning("HITL Concurrency Conflict", extra={"tenant_id": tenant_id, "decision_id": decision_id, "error": str(ve)})
+        raise HTTPException(status_code=409, detail=str(ve))
     except Exception as e:
-        if conn:
-            conn.rollback()
         logger.error("Failed approving decision card", extra={"tenant_id": tenant_id, "decision_id": decision_id, "error": str(e)})
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if conn:
-            conn.close()
 
 
 @app.get("/v1/support/handoffs")

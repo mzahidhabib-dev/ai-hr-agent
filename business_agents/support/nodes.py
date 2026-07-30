@@ -12,6 +12,7 @@ Rules compliance:
 """
 
 import time
+import uuid
 from functools import wraps
 from typing import Any, Dict
 from platform_core.sdk import sdk
@@ -96,7 +97,7 @@ def IntakeNode(state: dict) -> dict:
     Validates, normalizes, and deduplicates inbound customer support messages.
 
     Required state keys: tenant_id, inbound_message
-    Sets state keys:     channel, conversation_id, customer_id, external_message_id, attachments, status
+    Sets state keys:     channel, conversation_id, customer_id, external_message_id, attachments, status, trace_id, run_id
     """
     tenant_id = state.get("tenant_id")
     try:
@@ -122,14 +123,26 @@ def IntakeNode(state: dict) -> dict:
                 }
             _PROCESSED_MESSAGE_IDS.add(dedup_key)
             
+        trace_id = state.get("trace_id") or f"tr-{uuid.uuid4().hex[:12]}"
+        run_id = state.get("run_id") or f"run-{uuid.uuid4().hex[:12]}"
+        conversation_id = state.get("conversation_id") or f"conv-{uuid.uuid4().hex[:12]}"
+
         logger.info(
             "Inbound intake processed successfully",
-            extra={"tenant_id": tenant_id, "channel": state.get("channel", "web_chat")}
+            extra={
+                "tenant_id": tenant_id,
+                "trace_id": trace_id,
+                "run_id": run_id,
+                "conversation_id": conversation_id,
+                "channel": state.get("channel", "web_chat")
+            }
         )
         
         return {
             "channel": state.get("channel", "web_chat"),
-            "conversation_id": state.get("conversation_id"),
+            "trace_id": trace_id,
+            "run_id": run_id,
+            "conversation_id": conversation_id,
             "customer_id": state.get("customer_id"),
             "external_message_id": external_message_id,
             "attachments": state.get("attachments", []),
@@ -754,6 +767,8 @@ def EscalationNode(state: dict) -> dict:
             }
         else:
             handoff_package = ai_res["output"]
+            if message and message.lower() not in str(handoff_package.get("issue_summary", "")).lower():
+                handoff_package["issue_summary"] = f"Inquiry: '{message}' ({handoff_package.get('issue_summary', '')})"
             
         # Record handoff via SDK tools
         handoff_id = sdk.tools.call(

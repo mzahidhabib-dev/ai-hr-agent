@@ -77,10 +77,10 @@ Respond ONLY with valid JSON, no markdown block wrappers.
 Output Schema:
 {{
   "customer_summary": "Summary of customer, plan, and value",
-  "issue_summary": "Core issue description",
+  "issue_summary": "Exact customer inquiry question or core problem description",
   "attempted_actions": ["Action 1", "Action 2"],
-  "diagnosis": "Current technical/billing diagnosis",
-  "recommended_next_action": "Action human agent should take",
+  "diagnosis": "Current technical/billing diagnosis or documentation status",
+  "recommended_next_action": "Action human agent should take to fulfill request",
   "urgency": "LOW" | "MEDIUM" | "HIGH",
   "customer_sentiment": "CALM" | "FRUSTRATED" | "ANGRY",
   "escalation_reason": "Why AI escalated this ticket"

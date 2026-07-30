@@ -61,7 +61,8 @@ def evaluate_action_policy(tenant_id: str, action_type: str, action_params: Dict
         )
         
     # Account Cancellation / Deletion
-    if action_upper in ["CANCELLATION", "DELETE_ACCOUNT", "CANCEL_SUBSCRIPTION"]:
+    new_plan = str(action_params.get("new_plan_id", "")).upper()
+    if action_upper in ["CANCELLATION", "DELETE_ACCOUNT", "CANCEL_SUBSCRIPTION"] or new_plan in ["DELETE_ACCOUNT", "CANCEL_SUBSCRIPTION", "CANCEL_PLAN"]:
         return ActionPolicyResult(
             risk_level="HIGH",
             approval_status="WAITING_FOR_HUMAN",
