@@ -220,3 +220,59 @@ def get_support_analytics_metrics(tenant_id: str = Depends(get_tenant_id)):
     except Exception as e:
         logger.error("Failed fetching support metrics", extra={"tenant_id": tenant_id, "error": str(e)})
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- HR AGENT MULTI-CHANNEL WEBHOOK ROUTER ---
+
+class HRWebhookRequest(BaseModel):
+    query: str
+    channel: Optional[str] = "slack"
+    employee_id: Optional[str] = "emp-101"
+    message_id: Optional[str] = None
+
+
+PROCESSED_HR_MESSAGES = set()
+
+
+@app.post("/v1/hr/webhook")
+def handle_hr_webhook(req: HRWebhookRequest, tenant_id: str = Depends(get_tenant_id)):
+    """
+    Multi-tenant webhook router for Enterprise AI HR Agent (Slack, MS Teams, GoHighLevel, Web).
+    Enforces idempotency deduplication via message_id (Rule 25).
+    """
+    set_current_tenant(tenant_id)
+
+    # Rule 25: Idempotency deduplication check
+    if req.message_id:
+        dedup_key = f"{tenant_id}:{req.message_id}"
+        if dedup_key in PROCESSED_HR_MESSAGES:
+            logger.warning("Duplicate HR webhook event ignored", extra={"tenant_id": tenant_id, "message_id": req.message_id})
+            return {"status": "SKIPPED_DUPLICATE", "tenant_id": tenant_id, "message": "Event already processed."}
+        PROCESSED_HR_MESSAGES.add(dedup_key)
+
+    try:
+        from business_agents.hr.graph import create_hr_graph
+        hr_graph = create_hr_graph()
+
+        initial_state = {
+            "tenant_id": tenant_id,
+            "employee_id": req.employee_id,
+            "query": req.query,
+            "channel": req.channel,
+        }
+
+        final_state = hr_graph.invoke(initial_state)
+
+        return {
+            "status": "SUCCESS",
+            "tenant_id": tenant_id,
+            "employee_id": req.employee_id,
+            "intent": final_state.get("intent"),
+            "execution_status": final_state.get("status"),
+            "draft_response": final_state.get("draft_response"),
+            "decision_card_id": final_state.get("decision_card_id"),
+        }
+    except Exception as e:
+        logger.error("HR Webhook processing failed", extra={"tenant_id": tenant_id, "error": str(e)})
+        raise HTTPException(status_code=500, detail=str(e))
+

@@ -788,6 +788,74 @@ def ComplianceRiskNode(state: HRAgentState) -> HRAgentState:
         return {**state, "status": "FAILED", "error": str(e)}
 
 
+def EmployeeFrictionRadarNode(state: HRAgentState) -> HRAgentState:
+    """
+    Employee Friction Radar node: Analyzes employee grievances, payroll/workload friction, and computes retention risk.
+    """
+    tenant_id = state.get("tenant_id", "")
+    employee_id = state.get("employee_id", "")
+    query = state.get("query", "")
+
+    if tenant_id:
+        sdk.security.set_current_tenant(tenant_id)
+
+    try:
+        friction_keywords = ["burnout", "overtime", "frustrated", "unfair", "quit", "resign", "dispute", "workload"]
+        detected_signals = [kw for kw in friction_keywords if kw in query.lower()]
+
+        if len(detected_signals) >= 2 or "quit" in query.lower() or "resign" in query.lower():
+            friction_level = "HIGH_RETENTION_RISK"
+            risk_score = 88.0
+        elif len(detected_signals) == 1:
+            friction_level = "MEDIUM_FRICTION"
+            risk_score = 45.0
+        else:
+            friction_level = "LOW_FRICTION"
+            risk_score = 12.0
+
+        if friction_level == "HIGH_RETENTION_RISK":
+            sdk.events.publish(
+                tenant_id,
+                "hr.friction_alert",
+                {
+                    "employee_id": employee_id,
+                    "risk_score": risk_score,
+                    "signals": detected_signals,
+                    "query_snippet": query[:100],
+                },
+            )
+            logger.warning(
+                "High employee friction radar alert triggered",
+                extra={"tenant_id": tenant_id, "employee_id": employee_id, "risk_score": risk_score},
+            )
+
+        summary_text = (
+            f"Employee Friction Radar Analysis for #{employee_id}:\n"
+            f"- Friction Risk Level: {friction_level}\n"
+            f"- Objective Risk Score: {risk_score}/100\n"
+            f"- Detected Friction Signals: {', '.join(detected_signals) if detected_signals else 'None'}\n"
+            f"Message: Friction analysis logged for proactive HR retention management."
+        )
+
+        return {
+            **state,
+            "draft_response": summary_text,
+            "status": "COMPLETED",
+        }
+    except Exception as e:
+        logger.error(
+            "Unhandled exception in EmployeeFrictionRadarNode",
+            extra={"tenant_id": tenant_id, "error": str(e)},
+        )
+        sdk.events.publish(
+            tenant_id,
+            "workflow.failed",
+            {"node": "EmployeeFrictionRadarNode", "error": str(e)},
+        )
+        return {**state, "status": "FAILED", "error": str(e)}
+
+
+
 
 
 
